@@ -11,6 +11,7 @@ string connectionString;
 
 if (!string.IsNullOrEmpty(databaseUrl))
 {
+    // Railway provides DATABASE_URL in postgres:// format — convert to Npgsql format
     var uri = new Uri(databaseUrl);
     var userInfo = uri.UserInfo.Split(':');
     connectionString = $"Host={uri.Host};Port={uri.Port};Database={uri.AbsolutePath.TrimStart('/')};Username={userInfo[0]};Password={userInfo[1]};SSL Mode=Require;Trust Server Certificate=true";
@@ -40,6 +41,7 @@ builder.Services.AddScoped<AuthService>();
 builder.Services.AddHttpClient<ServiceTitanClient>();
 builder.Services.AddScoped<ServiceTitanOAuthService>();
 builder.Services.AddScoped<ServiceTitanSyncService>();
+builder.Services.AddHostedService<SyncSchedulerService>();
 
 // ── Controllers ───────────────────────────────────────────────────────────────
 builder.Services.AddControllers();
@@ -77,6 +79,8 @@ app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseRouting();
 app.MapControllers();
+
+// ── SPA fallback — serve index.html for all non-API routes ───────────────────
 app.MapFallbackToFile("index.html");
 
 app.Run();

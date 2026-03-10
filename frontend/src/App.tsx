@@ -32,7 +32,7 @@ function AppRoutes() {
           <Route path="/app/login" element={<LoginPage />} />
           <Route path="/app/register" element={<RegisterPage />} />
 
-          {/* Protected */}
+          {/* Protected app routes */}
           <Route
             path="/app/*"
             element={
@@ -42,6 +42,7 @@ function AppRoutes() {
                     <Route index element={<Navigate to="/app/dashboard" replace />} />
                     <Route path="dashboard" element={<DashboardPage />} />
                     <Route path="servicetitan" element={<ServiceTitanPage />} />
+                    {/* Future routes added here */}
                     <Route path="*" element={<div className="text-muted-foreground text-sm">Coming soon...</div>} />
                   </Routes>
                 </AppShell>
@@ -49,6 +50,7 @@ function AppRoutes() {
             }
           />
 
+          {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

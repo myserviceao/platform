@@ -1,9 +1,17 @@
+using System.Net.Http.Headers;
+
 namespace MyServiceAO.Services.ServiceTitan;
 
 /// <summary>
-/// Isolated ServiceTitan API client.
-/// All ST field names and response shapes are logged clearly here.
-/// OAuth2 token management is handled per-tenant.
+/// Low-level HTTP client for the ServiceTitan API.
+/// All ST endpoint URLs and field names are documented here.
+///
+/// Base URLs:
+///   Production:   https://api.servicetitan.io
+///   Auth:         https://auth.servicetitan.io/connect/token
+///
+/// All data endpoints follow: /{api}/v2/tenant/{tenantId}/{resource}
+/// Export endpoints return: { hasMore, continueFrom, data[] }
 /// </summary>
 public class ServiceTitanClient
 {
@@ -19,12 +27,16 @@ public class ServiceTitanClient
         _logger = logger;
     }
 
+    // ── Auth ──────────────────────────────────────────────────────────────────
+
     /// <summary>
-    /// Fetches a fresh OAuth2 access token using client credentials.
+    /// POST https://auth.servicetitan.io/connect/token
+    /// Grant type: client_credentials
+    /// Returns access_token valid ~60 minutes.
     /// </summary>
     public async Task<string?> GetAccessTokenAsync(string clientId, string clientSecret)
     {
-        _logger.LogInformation("[ST] Requesting access token for clientId={ClientId}", clientId);
+        _logger.LogInformation("[ST] Requesting token clientId={ClientId}", clientId);
 
         var form = new FormUrlEncodedContent(new[]
         {
@@ -36,33 +48,96 @@ public class ServiceTitanClient
         var response = await _http.PostAsync(AuthUrl, form);
         var body = await response.Content.ReadAsStringAsync();
 
-        _logger.LogInformation("[ST] Token response status={Status} body={Body}", response.StatusCode, body);
-
-        if (!response.IsSuccessStatusCode) return null;
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning("[ST] Token request failed status={Status} body={Body}", response.StatusCode, body);
+            return null;
+        }
 
         var json = System.Text.Json.JsonDocument.Parse(body);
         return json.RootElement.GetProperty("access_token").GetString();
     }
 
+    // ── Accounting ────────────────────────────────────────────────────────────
+
     /// <summary>
-    /// Fetches jobs from the export endpoint.
-    /// ST field names: id, number, status, customerId, locationId, etc.
+    /// GET /accounting/v2/tenant/{tenantId}/export/invoices
+    /// Query params: from (date string e.g. "2025-01-01"), includeRecentChanges=true
+    ///
+    /// Response fields used:
+    ///   data[].total        — invoice total (string, parse as decimal)
+    ///   data[].balance      — outstanding balance (string, parse as decimal). >0 = unpaid (AR)
+    ///   data[].invoiceDate  — date-time string, used to bucket by month
+    ///   data[].active       — bool, filter to true only
+    ///   hasMore             — bool, paginate if true
+    ///   continueFrom        — token for next page
     /// </summary>
-    public async Task<string> GetJobsAsync(string accessToken, string tenantId, string? continueFrom = null)
+    public async Task<string> GetInvoicesExportAsync(string accessToken, string stTenantId, string? from = null)
     {
-        var url = $"{BaseUrl}/jpm/v2/tenant/{tenantId}/export/jobs";
-        if (!string.IsNullOrEmpty(continueFrom))
-            url += $"?continueFrom={continueFrom}";
+        var url = $"{BaseUrl}/accounting/v2/tenant/{stTenantId}/export/invoices?includeRecentChanges=true";
+        if (!string.IsNullOrEmpty(from))
+            url += $"&from={from}";
 
-        _logger.LogInformation("[ST] GET {Url}", url);
+        _logger.LogInformation("[ST] GET invoices url={Url}", url);
+        return await GetAsync(accessToken, url);
+    }
 
-        _http.DefaultRequestHeaders.Authorization =
-            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+    // ── Job Planning & Management ─────────────────────────────────────────────
 
-        var response = await _http.GetAsync(url);
+    /// <summary>
+    /// GET /jpm/v2/tenant/{tenantId}/export/jobs
+    /// Query params: from (date string), includeRecentChanges=true
+    ///
+    /// Response fields used:
+    ///   data[].jobStatus    — string. Open WOs = NOT "Completed" or "Canceled"
+    ///                         Known values: "Scheduled", "InProgress", "Hold", "Completed", "Canceled"
+    ///   data[].active       — bool, filter to true only
+    ///   hasMore / continueFrom — pagination
+    /// </summary>
+    public async Task<string> GetJobsExportAsync(string accessToken, string stTenantId, string? from = null)
+    {
+        var url = $"{BaseUrl}/jpm/v2/tenant/{stTenantId}/export/jobs?includeRecentChanges=true";
+        if (!string.IsNullOrEmpty(from))
+            url += $"&from={from}";
+
+        _logger.LogInformation("[ST] GET jobs url={Url}", url);
+        return await GetAsync(accessToken, url);
+    }
+
+    // ── Memberships ───────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// GET /memberships/v2/tenant/{tenantId}/export/recurring-service-events
+    /// Query params: from (date string), includeRecentChanges=true
+    ///
+    /// Response fields used:
+    ///   data[].dueDate      — date-time string. Overdue = dueDate < today
+    ///   data[].status       — string. Overdue = not "Completed" or "Canceled"
+    ///                         Known values: "Scheduled", "Completed", "Canceled"
+    ///   data[].active       — bool, filter to true only
+    ///   hasMore / continueFrom — pagination
+    /// </summary>
+    public async Task<string> GetRecurringServiceEventsExportAsync(string accessToken, string stTenantId, string? from = null)
+    {
+        var url = $"{BaseUrl}/memberships/v2/tenant/{stTenantId}/export/recurring-service-events?includeRecentChanges=true";
+        if (!string.IsNullOrEmpty(from))
+            url += $"&from={from}";
+
+        _logger.LogInformation("[ST] GET recurring-service-events url={Url}", url);
+        return await GetAsync(accessToken, url);
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private async Task<string> GetAsync(string accessToken, string url)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        var response = await _http.SendAsync(request);
         var body = await response.Content.ReadAsStringAsync();
 
-        _logger.LogInformation("[ST] Jobs response status={Status} length={Length}", response.StatusCode, body.Length);
+        _logger.LogInformation("[ST] Response status={Status} length={Length}", response.StatusCode, body.Length);
 
         return body;
     }

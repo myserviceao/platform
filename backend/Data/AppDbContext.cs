@@ -9,6 +9,7 @@ public class AppDbContext : DbContext
 
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<User> Users => Set<User>();
+    public DbSet<DashboardSnapshot> DashboardSnapshots => Set<DashboardSnapshot>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -30,6 +31,16 @@ public class AppDbContext : DbContext
             e.HasOne(u => u.Tenant)
              .WithMany(t => t.Users)
              .HasForeignKey(u => u.TenantId);
+        });
+
+        // DashboardSnapshot — one per tenant
+        modelBuilder.Entity<DashboardSnapshot>(e =>
+        {
+            e.HasKey(d => d.Id);
+            e.HasIndex(d => d.TenantId).IsUnique();
+            e.HasOne(d => d.Tenant)
+             .WithMany()
+             .HasForeignKey(d => d.TenantId);
         });
     }
 }
