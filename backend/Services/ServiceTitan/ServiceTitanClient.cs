@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using Microsoft.Extensions.Configuration;
 
 namespace MyServiceAO.Services.ServiceTitan;
 
@@ -6,14 +7,16 @@ public class ServiceTitanClient
 {
     private readonly HttpClient _http;
     private readonly ILogger<ServiceTitanClient> _logger;
+    private readonly string _appKey;
 
     private const string BaseUrl = "https://api.servicetitan.io";
     private const string AuthUrl = "https://auth.servicetitan.io/connect/token";
 
-    public ServiceTitanClient(HttpClient http, ILogger<ServiceTitanClient> logger)
+    public ServiceTitanClient(HttpClient http, ILogger<ServiceTitanClient> logger, IConfiguration config)
     {
         _http = http;
         _logger = logger;
+        _appKey = config["ST_APP_KEY"] ?? throw new InvalidOperationException("ST_APP_KEY is not configured");
     }
 
     public async Task<string?> GetAccessTokenAsync(string clientId, string clientSecret)
@@ -40,7 +43,6 @@ public class ServiceTitanClient
         return json.RootElement.GetProperty("access_token").GetString();
     }
 
-    // from = date string (e.g. "2026-01-01") to filter by modifiedOn, OR a continueFrom token for pagination
     public async Task<string> GetInvoicesExportAsync(string accessToken, string stTenantId, string? from = null)
     {
         var url = $"{BaseUrl}/accounting/v2/tenant/{stTenantId}/export/invoices?includeRecentChanges=true";
@@ -72,6 +74,7 @@ public class ServiceTitanClient
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        request.Headers.Add("ST-App-Key", _appKey);
 
         var response = await _http.SendAsync(request);
         var body = await response.Content.ReadAsStringAsync();
