@@ -43,11 +43,41 @@ public class ServiceTitanClient
         return json.RootElement.GetProperty("access_token").GetString();
     }
 
+    // Fetches all job types from ST and returns a jobTypeId -> name map.
+    // Job export records only contain jobTypeId (not the name), so this
+    // lookup is required to determine if a job is a PM.
+    public async Task<Dictionary<long, string>> GetJobTypeMapAsync(string accessToken, string stTenantId)
+    {
+        var map = new Dictionary<long, string>();
+        int page = 1;
+
+        while (true)
+        {
+            var url = $"{BaseUrl}/jpm/v2/tenant/{stTenantId}/job-types?page={page}&pageSize=200";
+            var json = await GetAsync(accessToken, url);
+            var doc = System.Text.Json.JsonDocument.Parse(json);
+            var data = doc.RootElement.GetProperty("data");
+
+            if (data.GetArrayLength() == 0) break;
+
+            foreach (var item in data.EnumerateArray())
+            {
+                var id = item.GetProperty("id").GetInt64();
+                var name = item.GetProperty("name").GetString() ?? "Unknown";
+                map[id] = name;
+            }
+
+            page++;
+        }
+
+        _logger.LogInformation("[ST] Job type map loaded count={Count}", map.Count);
+        return map;
+    }
+
     public async Task<string> GetInvoicesExportAsync(string accessToken, string stTenantId, string? from = null)
     {
         var url = $"{BaseUrl}/accounting/v2/tenant/{stTenantId}/export/invoices?includeRecentChanges=true";
-        if (!string.IsNullOrEmpty(from))
-            url += $"&from={Uri.EscapeDataString(from)}";
+        if (!string.IsNullOrEmpty(from)) url += $"&from={Uri.EscapeDataString(from)}";
         _logger.LogInformation("[ST] GET invoices url={Url}", url);
         return await GetAsync(accessToken, url);
     }
@@ -55,18 +85,8 @@ public class ServiceTitanClient
     public async Task<string> GetJobsExportAsync(string accessToken, string stTenantId, string? from = null)
     {
         var url = $"{BaseUrl}/jpm/v2/tenant/{stTenantId}/export/jobs?includeRecentChanges=true";
-        if (!string.IsNullOrEmpty(from))
-            url += $"&from={Uri.EscapeDataString(from)}";
+        if (!string.IsNullOrEmpty(from)) url += $"&from={Uri.EscapeDataString(from)}";
         _logger.LogInformation("[ST] GET jobs url={Url}", url);
-        return await GetAsync(accessToken, url);
-    }
-
-    public async Task<string> GetRecurringServiceEventsExportAsync(string accessToken, string stTenantId, string? from = null)
-    {
-        var url = $"{BaseUrl}/memberships/v2/tenant/{stTenantId}/export/recurring-service-events?includeRecentChanges=true";
-        if (!string.IsNullOrEmpty(from))
-            url += $"&from={Uri.EscapeDataString(from)}";
-        _logger.LogInformation("[ST] GET recurring-service-events url={Url}", url);
         return await GetAsync(accessToken, url);
     }
 
