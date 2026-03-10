@@ -137,7 +137,7 @@ export function DashboardPage() {
         <KpiCard
           title="Revenue This Month"
           value={fmt(data?.revenueThisMonth ?? 0)}
-          badge={change ? { label: `${change.pct}%`, up: change.up } : null}
+          badge={change ? { pct: `${change.pct}%`, up: change.up } : null}
           sub={`Last month: ${fmt(data?.revenueLastMonth ?? 0)}`}
         />
         <KpiCard
