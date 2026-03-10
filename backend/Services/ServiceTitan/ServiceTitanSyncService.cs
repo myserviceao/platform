@@ -72,13 +72,13 @@ public class ServiceTitanSyncService
         tenant.LastSyncedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
-        _logger.LogInformation("[ST Sync] Complete tenantId={TenantId} Revenue={Rev} AR={AR} Jobs={Jobs} PMs={PMs} Errors={Err}",
-            tenantId, snapshot.RevenueThisMonth, snapshot.AccountsReceivable, snapshot.OpenJobCount, snapshot.OverduePmCount, errors.Count);
+        _logger.LogInformation("[ST Sync] Complete tenantId={TenantId} RevThis={RevThis} RevLast={RevLast} AR={AR} Jobs={Jobs} PMs={PMs} Errors={Err}",
+            tenantId, snapshot.RevenueThisMonth, snapshot.RevenueLastMonth, snapshot.AccountsReceivable, snapshot.OpenJobCount, snapshot.OverduePmCount, errors.Count);
 
         return new SyncResult { Success = true, SyncedAt = snapshot.SnapshotTakenAt, Error = errors.Count > 0 ? string.Join("; ", errors) : null };
     }
 
-    private async Task SyncInvoicesAsync(string token, string stTenantId, DashboardSnapshot snapshot, string createdOnOrAfter)
+    private async Task SyncInvoicesAsync(string token, string stTenantId, DashboardSnapshot snapshot, string from)
     {
         var now = DateTime.UtcNow;
         var thisMonthStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
@@ -86,23 +86,21 @@ public class ServiceTitanSyncService
         var lastMonthEnd = thisMonthStart;
 
         decimal revenueThisMonth = 0, revenueLastMonth = 0, ar = 0;
-        int unpaidCount = 0;
-        string? continueFrom = null;
-        bool firstPage = true;
+        int unpaidCount = 0, totalRecords = 0;
+        string? continueFrom = from;
 
         do
         {
-            var json = await _client.GetInvoicesExportAsync(token, stTenantId,
-                firstPage ? createdOnOrAfter : null, continueFrom);
-            firstPage = false;
-
+            var json = await _client.GetInvoicesExportAsync(token, stTenantId, continueFrom);
             var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
             if (!root.TryGetProperty("data", out var data)) break;
 
+            var count = 0;
             foreach (var inv in data.EnumerateArray())
             {
-                if (inv.TryGetProperty("active", out var active) && !active.GetBoolean()) continue;
+                count++;
+                // Note: NOT filtering by active — export API returns all records
                 var total = ParseDecimal(inv, "total");
                 var balance = ParseDecimal(inv, "balance");
                 var invoiceDate = ParseDateTime(inv, "invoiceDate");
@@ -111,82 +109,82 @@ public class ServiceTitanSyncService
                 if (invoiceDate >= lastMonthStart && invoiceDate < lastMonthEnd) revenueLastMonth += total;
                 if (balance > 0) { ar += balance; unpaidCount++; }
             }
+            totalRecords += count;
 
             var hasMore = root.TryGetProperty("hasMore", out var hm) && hm.GetBoolean();
             continueFrom = hasMore && root.TryGetProperty("continueFrom", out var cf) ? cf.GetString() : null;
             if (!hasMore) break;
         } while (continueFrom != null);
 
+        _logger.LogInformation("[ST Sync] Invoices processed={Total} revThis={RevThis} revLast={RevLast} ar={AR}", totalRecords, revenueThisMonth, revenueLastMonth, ar);
         snapshot.RevenueThisMonth = revenueThisMonth;
         snapshot.RevenueLastMonth = revenueLastMonth;
         snapshot.AccountsReceivable = ar;
         snapshot.UnpaidInvoiceCount = unpaidCount;
     }
 
-    private async Task SyncJobsAsync(string token, string stTenantId, DashboardSnapshot snapshot, string createdOnOrAfter)
+    private async Task SyncJobsAsync(string token, string stTenantId, DashboardSnapshot snapshot, string from)
     {
         var closedStatuses = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Completed", "Canceled" };
-        int openJobs = 0;
-        string? continueFrom = null;
-        bool firstPage = true;
+        int openJobs = 0, totalRecords = 0;
+        string? continueFrom = from;
 
         do
         {
-            var json = await _client.GetJobsExportAsync(token, stTenantId,
-                firstPage ? createdOnOrAfter : null, continueFrom);
-            firstPage = false;
-
+            var json = await _client.GetJobsExportAsync(token, stTenantId, continueFrom);
             var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
             if (!root.TryGetProperty("data", out var data)) break;
 
+            var count = 0;
             foreach (var job in data.EnumerateArray())
             {
-                if (job.TryGetProperty("active", out var active) && !active.GetBoolean()) continue;
+                count++;
                 var status = job.TryGetProperty("jobStatus", out var s) ? s.GetString() ?? "" : "";
                 if (!closedStatuses.Contains(status)) openJobs++;
             }
+            totalRecords += count;
 
             var hasMore = root.TryGetProperty("hasMore", out var hm) && hm.GetBoolean();
             continueFrom = hasMore && root.TryGetProperty("continueFrom", out var cf) ? cf.GetString() : null;
             if (!hasMore) break;
         } while (continueFrom != null);
 
+        _logger.LogInformation("[ST Sync] Jobs processed={Total} openJobs={Open}", totalRecords, openJobs);
         snapshot.OpenJobCount = openJobs;
     }
 
-    private async Task SyncRecurringServiceEventsAsync(string token, string stTenantId, DashboardSnapshot snapshot, string createdOnOrAfter)
+    private async Task SyncRecurringServiceEventsAsync(string token, string stTenantId, DashboardSnapshot snapshot, string from)
     {
         var closedStatuses = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Completed", "Canceled" };
         var today = DateTime.UtcNow.Date;
-        int overduePms = 0;
-        string? continueFrom = null;
-        bool firstPage = true;
+        int overduePms = 0, totalRecords = 0;
+        string? continueFrom = from;
 
         do
         {
-            var json = await _client.GetRecurringServiceEventsExportAsync(token, stTenantId,
-                firstPage ? createdOnOrAfter : null, continueFrom);
-            firstPage = false;
-
+            var json = await _client.GetRecurringServiceEventsExportAsync(token, stTenantId, continueFrom);
             var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
             if (!root.TryGetProperty("data", out var data)) break;
 
+            var count = 0;
             foreach (var evt in data.EnumerateArray())
             {
-                if (evt.TryGetProperty("active", out var active) && !active.GetBoolean()) continue;
+                count++;
                 var status = evt.TryGetProperty("status", out var s) ? s.GetString() ?? "" : "";
                 if (closedStatuses.Contains(status)) continue;
                 var dueDate = ParseDateTime(evt, "dueDate");
                 if (dueDate.HasValue && dueDate.Value.Date < today) overduePms++;
             }
+            totalRecords += count;
 
             var hasMore = root.TryGetProperty("hasMore", out var hm) && hm.GetBoolean();
             continueFrom = hasMore && root.TryGetProperty("continueFrom", out var cf) ? cf.GetString() : null;
             if (!hasMore) break;
         } while (continueFrom != null);
 
+        _logger.LogInformation("[ST Sync] RecurringEvents processed={Total} overduePMs={PMs}", totalRecords, overduePms);
         snapshot.OverduePmCount = overduePms;
     }
 
