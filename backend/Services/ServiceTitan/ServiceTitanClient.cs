@@ -22,55 +22,76 @@ public class ServiceTitanClient
     public async Task<string?> GetAccessTokenAsync(string clientId, string clientSecret)
     {
         _logger.LogInformation("[ST] Requesting token clientId={ClientId}", clientId);
-
         var form = new FormUrlEncodedContent(new[]
         {
             new KeyValuePair<string, string>("grant_type", "client_credentials"),
             new KeyValuePair<string, string>("client_id", clientId),
             new KeyValuePair<string, string>("client_secret", clientSecret)
         });
-
         var response = await _http.PostAsync(AuthUrl, form);
         var body = await response.Content.ReadAsStringAsync();
-
         if (!response.IsSuccessStatusCode)
         {
             _logger.LogWarning("[ST] Token request failed status={Status} body={Body}", response.StatusCode, body);
             return null;
         }
-
         var json = System.Text.Json.JsonDocument.Parse(body);
         return json.RootElement.GetProperty("access_token").GetString();
     }
 
-    // Fetches all job types from ST and returns a jobTypeId -> name map.
-    // Job export records only contain jobTypeId (not the name), so this
-    // lookup is required to determine if a job is a PM.
+    /// <summary>
+    /// Fetches all job types from ST and returns a jobTypeId -> name map.
+    /// Job export records only contain jobTypeId (not the name), so this
+    /// lookup is required to determine if a job is a PM.
+    /// </summary>
     public async Task<Dictionary<long, string>> GetJobTypeMapAsync(string accessToken, string stTenantId)
     {
         var map = new Dictionary<long, string>();
         int page = 1;
-
         while (true)
         {
             var url = $"{BaseUrl}/jpm/v2/tenant/{stTenantId}/job-types?page={page}&pageSize=200";
             var json = await GetAsync(accessToken, url);
             var doc = System.Text.Json.JsonDocument.Parse(json);
             var data = doc.RootElement.GetProperty("data");
-
             if (data.GetArrayLength() == 0) break;
-
             foreach (var item in data.EnumerateArray())
             {
                 var id = item.GetProperty("id").GetInt64();
                 var name = item.GetProperty("name").GetString() ?? "Unknown";
                 map[id] = name;
             }
-
             page++;
         }
-
         _logger.LogInformation("[ST] Job type map loaded count={Count}", map.Count);
+        return map;
+    }
+
+    /// <summary>
+    /// Fetches all customers from ST export and returns a customerId -> name map.
+    /// </summary>
+    public async Task<Dictionary<long, string>> GetCustomerNameMapAsync(string accessToken, string stTenantId)
+    {
+        var map = new Dictionary<long, string>();
+        string? continueFrom = null;
+        do
+        {
+            var url = $"{BaseUrl}/crm/v2/tenant/{stTenantId}/export/customers";
+            if (continueFrom != null) url += $"?from={Uri.EscapeDataString(continueFrom)}";
+            var json = await GetAsync(accessToken, url);
+            var doc = System.Text.Json.JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (!root.TryGetProperty("data", out var data)) break;
+            foreach (var cust in data.EnumerateArray())
+            {
+                if (cust.TryGetProperty("id", out var idProp) && cust.TryGetProperty("name", out var nameProp))
+                    map[idProp.GetInt64()] = nameProp.GetString() ?? "Unknown";
+            }
+            var hasMore = root.TryGetProperty("hasMore", out var hm) && hm.GetBoolean();
+            continueFrom = hasMore && root.TryGetProperty("continueFrom", out var cf) ? cf.GetString() : null;
+            if (!hasMore) break;
+        } while (continueFrom != null);
+        _logger.LogInformation("[ST] Customer name map loaded count={Count}", map.Count);
         return map;
     }
 
@@ -95,15 +116,11 @@ public class ServiceTitanClient
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
         request.Headers.Add("ST-App-Key", _appKey);
-
         var response = await _http.SendAsync(request);
         var body = await response.Content.ReadAsStringAsync();
-
         _logger.LogInformation("[ST] Response status={Status} length={Length}", response.StatusCode, body.Length);
-
         if (!response.IsSuccessStatusCode)
             throw new Exception($"ST API error {(int)response.StatusCode}: {body}");
-
         return body;
     }
 }
