@@ -4,6 +4,7 @@ import { LandingPage } from '@/pages/Landing/LandingPage'
 import { LoginPage } from '@/pages/App/LoginPage'
 import { RegisterPage } from '@/pages/App/RegisterPage'
 import { DashboardPage } from '@/pages/App/Dashboard/DashboardPage'
+import { PmTrackerPage } from '@/pages/App/PmTracker/PmTrackerPage'
 import { AppShell } from '@/components/layout/AppShell'
 import ServiceTitanPage from '@/pages/App/ServiceTitanPage'
 
@@ -41,8 +42,8 @@ function AppRoutes() {
                   <Routes>
                     <Route index element={<Navigate to="/app/dashboard" replace />} />
                     <Route path="dashboard" element={<DashboardPage />} />
+                    <Route path="pm-tracker" element={<PmTrackerPage />} />
                     <Route path="servicetitan" element={<ServiceTitanPage />} />
-                    {/* Future routes added here */}
                     <Route path="*" element={<div className="text-muted-foreground text-sm">Coming soon...</div>} />
                   </Routes>
                 </AppShell>
