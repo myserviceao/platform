@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from "react";
-import { useAuth } from "@/hooks/useAuth";
 
 interface DashboardSnapshot {
   synced: boolean;
@@ -26,7 +25,7 @@ interface KpiCardProps {
   title: string;
   value: string;
   sub?: string;
-  badge?: { label: string; up: boolean } | null;
+  badge?: { pct: string; up: boolean } | null;
   alert?: boolean;
 }
 
@@ -46,7 +45,6 @@ function KpiCard({ title, value, sub, badge, alert }: KpiCardProps) {
 }
 
 export function DashboardPage() {
-  const { user } = useAuth();
   const [data, setData] = useState<DashboardSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
