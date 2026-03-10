@@ -12,7 +12,6 @@ public class ServiceTitanSyncService
     private readonly ServiceTitanOAuthService _oauth;
     private readonly ILogger<ServiceTitanSyncService> _logger;
 
-    // Job type names that count as a PM (case-insensitive contains)
     private static readonly string[] PmKeywords = { "maintenance", "tune up", "tune-up", "pm" };
 
     public ServiceTitanSyncService(AppDbContext db, ServiceTitanClient client, ServiceTitanOAuthService oauth, ILogger<ServiceTitanSyncService> logger)
@@ -36,8 +35,6 @@ public class ServiceTitanSyncService
                        ?? new DashboardSnapshot { TenantId = tenantId };
 
         var errors = new List<string>();
-
-        // customerId -> latest completed PM date
         var lastPmByCustomer = new Dictionary<long, DateTime>();
 
         try
@@ -45,45 +42,79 @@ public class ServiceTitanSyncService
             var from = DateTime.UtcNow.AddMonths(-2).ToString("yyyy-MM-dd");
             await SyncInvoicesAsync(token, tenant.StTenantId, snapshot, from);
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "[ST Sync] Invoices failed");
-            errors.Add("invoices: " + ex.Message);
-        }
+        catch (Exception ex) { _logger.LogError(ex, "[ST Sync] Invoices failed"); errors.Add("invoices: " + ex.Message); }
 
         try
         {
-            // Fetch job type map first — job type name is NOT on the job record itself
             var jobTypeMap = await _client.GetJobTypeMapAsync(token, tenant.StTenantId);
-
-            // 18 months covers any customer overdue by 6 months with plenty of history
             var from = DateTime.UtcNow.AddMonths(-18).ToString("yyyy-MM-dd");
             await SyncJobsAsync(token, tenant.StTenantId, snapshot, from, jobTypeMap, lastPmByCustomer);
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "[ST Sync] Jobs failed");
-            errors.Add("jobs: " + ex.Message);
-        }
+        catch (Exception ex) { _logger.LogError(ex, "[ST Sync] Jobs failed"); errors.Add("jobs: " + ex.Message); }
 
-        // Overdue = last PM was more than 6 months ago
-        // Coming due = 4-6 months ago
-        // Current = less than 4 months ago
+        try
+        {
+            var customerNames = await _client.GetCustomerNameMapAsync(token, tenant.StTenantId);
+            await PersistPmCustomersAsync(tenantId, lastPmByCustomer, customerNames);
+        }
+        catch (Exception ex) { _logger.LogError(ex, "[ST Sync] PM customers failed"); errors.Add("pm-customers: " + ex.Message); }
+
         var overdueDate = DateTime.UtcNow.AddMonths(-6);
         snapshot.OverduePmCount = lastPmByCustomer.Values.Count(d => d < overdueDate);
 
-        _logger.LogInformation("[ST Sync] PM customers tracked={Total} overdue(6mo+)={Overdue}",
-            lastPmByCustomer.Count, snapshot.OverduePmCount);
+        _logger.LogInformation("[ST Sync] PM customers tracked={Total} overdue={Overdue}", lastPmByCustomer.Count, snapshot.OverduePmCount);
 
         snapshot.SnapshotTakenAt = DateTime.UtcNow;
         if (snapshot.Id == 0) _db.DashboardSnapshots.Add(snapshot);
         tenant.LastSyncedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
-        _logger.LogInformation("[ST Sync] Complete tenantId={TenantId} RevThis={RevThis} RevLast={RevLast} AR={AR} Jobs={Jobs} PMs={PMs} Errors={Err}",
-            tenantId, snapshot.RevenueThisMonth, snapshot.RevenueLastMonth, snapshot.AccountsReceivable, snapshot.OpenJobCount, snapshot.OverduePmCount, errors.Count);
+        _logger.LogInformation("[ST Sync] Complete tenantId={TenantId} RevThis={RevThis} AR={AR} Jobs={Jobs} PMs={PMs} Errors={Err}",
+            tenantId, snapshot.RevenueThisMonth, snapshot.AccountsReceivable, snapshot.OpenJobCount, snapshot.OverduePmCount, errors.Count);
 
         return new SyncResult { Success = true, SyncedAt = snapshot.SnapshotTakenAt, Error = errors.Count > 0 ? string.Join("; ", errors) : null };
+    }
+
+    private async Task PersistPmCustomersAsync(int tenantId, Dictionary<long, DateTime> lastPmByCustomer, Dictionary<long, string> customerNames)
+    {
+        var now = DateTime.UtcNow;
+        var overdueDate = now.AddMonths(-6);
+        var comingDueDate = now.AddMonths(-4);
+
+        foreach (var (stCustomerId, lastPmDate) in lastPmByCustomer)
+        {
+            var status = lastPmDate < overdueDate ? "Overdue"
+                       : lastPmDate < comingDueDate ? "ComingDue"
+                       : "Current";
+
+            var name = customerNames.TryGetValue(stCustomerId, out var n) ? n : "Customer " + stCustomerId;
+
+            var existing = await _db.PmCustomers
+                .FirstOrDefaultAsync(p => p.TenantId == tenantId && p.StCustomerId == stCustomerId);
+
+            if (existing == null)
+            {
+                _db.PmCustomers.Add(new PmCustomer
+                {
+                    TenantId = tenantId,
+                    StCustomerId = stCustomerId,
+                    CustomerName = name,
+                    LastPmDate = lastPmDate,
+                    PmStatus = status,
+                    UpdatedAt = now
+                });
+            }
+            else
+            {
+                existing.CustomerName = name;
+                existing.LastPmDate = lastPmDate;
+                existing.PmStatus = status;
+                existing.UpdatedAt = now;
+            }
+        }
+
+        await _db.SaveChangesAsync();
+        _logger.LogInformation("[ST Sync] PM customers persisted count={Count}", lastPmByCustomer.Count);
     }
 
     private async Task SyncInvoicesAsync(string token, string stTenantId, DashboardSnapshot snapshot, string from)
@@ -92,7 +123,6 @@ public class ServiceTitanSyncService
         var thisMonthStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
         var lastMonthStart = thisMonthStart.AddMonths(-1);
         var lastMonthEnd = thisMonthStart;
-
         decimal revenueThisMonth = 0, revenueLastMonth = 0, ar = 0;
         int unpaidCount = 0, totalRecords = 0;
         string? continueFrom = from;
@@ -103,7 +133,6 @@ public class ServiceTitanSyncService
             var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
             if (!root.TryGetProperty("data", out var data)) break;
-
             foreach (var inv in data.EnumerateArray())
             {
                 totalRecords++;
@@ -115,13 +144,12 @@ public class ServiceTitanSyncService
                 if (invoiceDate >= lastMonthStart && invoiceDate < lastMonthEnd) revenueLastMonth += total;
                 if (balance > 0) { ar += balance; unpaidCount++; }
             }
-
             var hasMore = root.TryGetProperty("hasMore", out var hm) && hm.GetBoolean();
             continueFrom = hasMore && root.TryGetProperty("continueFrom", out var cf) ? cf.GetString() : null;
             if (!hasMore) break;
         } while (continueFrom != null);
 
-        _logger.LogInformation("[ST Sync] Invoices processed={Total} revThis={RevThis} revLast={RevLast} ar={AR}", totalRecords, revenueThisMonth, revenueLastMonth, ar);
+        _logger.LogInformation("[ST Sync] Invoices processed={Total} revThis={RevThis} ar={AR}", totalRecords, revenueThisMonth, ar);
         snapshot.RevenueThisMonth = revenueThisMonth;
         snapshot.RevenueLastMonth = revenueLastMonth;
         snapshot.AccountsReceivable = ar;
@@ -140,47 +168,29 @@ public class ServiceTitanSyncService
             var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
             if (!root.TryGetProperty("data", out var data)) break;
-
             foreach (var job in data.EnumerateArray())
             {
                 totalRecords++;
-
                 var status = job.TryGetProperty("jobStatus", out var s) ? s.GetString() ?? "" : "";
                 if (!closedStatuses.Contains(status)) openJobs++;
-
-                // Only completed jobs count for PM history
                 if (!status.Equals("Completed", StringComparison.OrdinalIgnoreCase)) continue;
-
-                // Look up job type name via jobTypeId
-                if (!job.TryGetProperty("jobTypeId", out var jobTypeIdProp) ||
-                    jobTypeIdProp.ValueKind != JsonValueKind.Number) continue;
-
-                var jobTypeId = jobTypeIdProp.GetInt64();
-                if (!jobTypeMap.TryGetValue(jobTypeId, out var jobTypeName)) continue;
-
-                var isPm = PmKeywords.Any(k => jobTypeName.ToLower().Contains(k));
-                if (!isPm) continue;
-
-                // Get customer ID
-                if (!job.TryGetProperty("customerId", out var custIdProp) ||
-                    custIdProp.ValueKind != JsonValueKind.Number) continue;
-                var customerId = custIdProp.GetInt64();
-
-                // Track most recent completed PM date per customer
+                if (!job.TryGetProperty("jobTypeId", out var jtProp) || jtProp.ValueKind != JsonValueKind.Number) continue;
+                if (!jobTypeMap.TryGetValue(jtProp.GetInt64(), out var jobTypeName)) continue;
+                if (!PmKeywords.Any(k => jobTypeName.ToLower().Contains(k))) continue;
+                if (!job.TryGetProperty("customerId", out var cProp) || cProp.ValueKind != JsonValueKind.Number) continue;
+                var customerId = cProp.GetInt64();
                 var completedOn = ParseDateTime(job, "completedOn") ?? ParseDateTime(job, "modifiedOn");
                 if (completedOn == null) continue;
-
                 pmJobsFound++;
                 if (!lastPmByCustomer.TryGetValue(customerId, out var existing) || completedOn > existing)
                     lastPmByCustomer[customerId] = completedOn.Value;
             }
-
             var hasMore = root.TryGetProperty("hasMore", out var hm) && hm.GetBoolean();
             continueFrom = hasMore && root.TryGetProperty("continueFrom", out var cf) ? cf.GetString() : null;
             if (!hasMore) break;
         } while (continueFrom != null);
 
-        _logger.LogInformation("[ST Sync] Jobs processed={Total} openJobs={Open} pmJobsFound={PM}", totalRecords, openJobs, pmJobsFound);
+        _logger.LogInformation("[ST Sync] Jobs processed={Total} openJobs={Open} pmJobs={PM}", totalRecords, openJobs, pmJobsFound);
         snapshot.OpenJobCount = openJobs;
     }
 
