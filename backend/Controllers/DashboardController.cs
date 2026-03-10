@@ -18,11 +18,6 @@ public class DashboardController : ControllerBase
         _sync = sync;
     }
 
-    /// <summary>
-    /// GET /api/dashboard/snapshot
-    /// Returns the latest cached KPI snapshot for the current tenant.
-    /// Returns zeroed data if no sync has run yet.
-    /// </summary>
     [HttpGet("snapshot")]
     public async Task<IActionResult> GetSnapshot()
     {
@@ -34,7 +29,6 @@ public class DashboardController : ControllerBase
 
         if (snapshot == null)
         {
-            // No sync yet — return empty state
             return Ok(new
             {
                 synced = false,
@@ -61,10 +55,6 @@ public class DashboardController : ControllerBase
         });
     }
 
-    /// <summary>
-    /// POST /api/dashboard/sync
-    /// Triggers an on-demand sync for the current tenant and returns fresh snapshot.
-    /// </summary>
     [HttpPost("sync")]
     public async Task<IActionResult> Sync()
     {
@@ -76,7 +66,32 @@ public class DashboardController : ControllerBase
         if (!result.Success)
             return BadRequest(new { error = result.Error });
 
-        // Return fresh snapshot after sync
         return await GetSnapshot();
+    }
+
+    /// <summary>
+    /// GET /api/dashboard/pm-tracker
+    /// Returns all PM customers for the current tenant, sorted by LastPmDate ascending (oldest first).
+    /// </summary>
+    [HttpGet("pm-tracker")]
+    public async Task<IActionResult> GetPmTracker()
+    {
+        var tenantId = HttpContext.Session.GetInt32("tenantId");
+        if (tenantId == null) return Unauthorized();
+
+        var customers = await _db.PmCustomers
+            .Where(p => p.TenantId == tenantId.Value)
+            .OrderBy(p => p.LastPmDate)
+            .Select(p => new
+            {
+                p.StCustomerId,
+                p.CustomerName,
+                p.LastPmDate,
+                p.PmStatus,
+                p.UpdatedAt
+            })
+            .ToListAsync();
+
+        return Ok(customers);
     }
 }
