@@ -12,6 +12,8 @@ public class ServiceTitanSyncService
     private readonly ServiceTitanOAuthService _oauth;
     private readonly ILogger<ServiceTitanSyncService> _logger;
 
+    private static readonly string[] PmKeywords = { "maintenance", "tune up", "tune-up", "pm" };
+
     public ServiceTitanSyncService(AppDbContext db, ServiceTitanClient client, ServiceTitanOAuthService oauth, ILogger<ServiceTitanSyncService> logger)
     {
         _db = db; _client = client; _oauth = oauth; _logger = logger;
@@ -34,6 +36,9 @@ public class ServiceTitanSyncService
 
         var errors = new List<string>();
 
+        // customerId -> latest completed PM date
+        var lastPmByCustomer = new Dictionary<string, DateTime>();
+
         try
         {
             var from = DateTime.UtcNow.AddMonths(-2).ToString("yyyy-MM-dd");
@@ -41,31 +46,28 @@ public class ServiceTitanSyncService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "[ST Sync] Invoices failed tenantId={TenantId}", tenantId);
+            _logger.LogError(ex, "[ST Sync] Invoices failed");
             errors.Add("invoices: " + ex.Message);
         }
 
         try
         {
-            var from = DateTime.UtcNow.AddMonths(-6).ToString("yyyy-MM-dd");
-            await SyncJobsAsync(token, tenant.StTenantId, snapshot, from);
+            // 18 months covers anyone overdue by 6 months with room to spare
+            var from = DateTime.UtcNow.AddMonths(-18).ToString("yyyy-MM-dd");
+            await SyncJobsAsync(token, tenant.StTenantId, snapshot, from, lastPmByCustomer);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "[ST Sync] Jobs failed tenantId={TenantId}", tenantId);
+            _logger.LogError(ex, "[ST Sync] Jobs failed");
             errors.Add("jobs: " + ex.Message);
         }
 
-        try
-        {
-            var from = DateTime.UtcNow.AddMonths(-3).ToString("yyyy-MM-dd");
-            await SyncRecurringServiceEventsAsync(token, tenant.StTenantId, snapshot, from);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "[ST Sync] RecurringEvents failed tenantId={TenantId}", tenantId);
-            errors.Add("recurring: " + ex.Message);
-        }
+        // Overdue = last PM was more than 6 months ago
+        var overdueDate = DateTime.UtcNow.AddMonths(-6);
+        snapshot.OverduePmCount = lastPmByCustomer.Values.Count(d => d < overdueDate);
+
+        _logger.LogInformation("[ST Sync] PM customers={Total} overdue(6mo+)={Overdue}",
+            lastPmByCustomer.Count, snapshot.OverduePmCount);
 
         snapshot.SnapshotTakenAt = DateTime.UtcNow;
         if (snapshot.Id == 0) _db.DashboardSnapshots.Add(snapshot);
@@ -100,7 +102,6 @@ public class ServiceTitanSyncService
             foreach (var inv in data.EnumerateArray())
             {
                 count++;
-                // Note: NOT filtering by active — export API returns all records
                 var total = ParseDecimal(inv, "total");
                 var balance = ParseDecimal(inv, "balance");
                 var invoiceDate = ParseDateTime(inv, "invoiceDate");
@@ -123,7 +124,7 @@ public class ServiceTitanSyncService
         snapshot.UnpaidInvoiceCount = unpaidCount;
     }
 
-    private async Task SyncJobsAsync(string token, string stTenantId, DashboardSnapshot snapshot, string from)
+    private async Task SyncJobsAsync(string token, string stTenantId, DashboardSnapshot snapshot, string from, Dictionary<string, DateTime> lastPmByCustomer)
     {
         var closedStatuses = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Completed", "Canceled" };
         int openJobs = 0, totalRecords = 0;
@@ -140,8 +141,40 @@ public class ServiceTitanSyncService
             foreach (var job in data.EnumerateArray())
             {
                 count++;
+
                 var status = job.TryGetProperty("jobStatus", out var s) ? s.GetString() ?? "" : "";
                 if (!closedStatuses.Contains(status)) openJobs++;
+
+                // Check if this is a PM job by jobType name
+                var jobTypeName = "";
+                if (job.TryGetProperty("jobType", out var jt) && jt.ValueKind == JsonValueKind.Object)
+                    jt.TryGetProperty("name", out var jtn);
+                if (job.TryGetProperty("type", out var tp) && tp.ValueKind == JsonValueKind.String)
+                    jobTypeName = tp.GetString() ?? "";
+                if (string.IsNullOrEmpty(jobTypeName) && job.TryGetProperty("jobTypeName", out var jtn2))
+                    jobTypeName = jtn2.GetString() ?? "";
+
+                var isPm = PmKeywords.Any(k => jobTypeName.ToLower().Contains(k));
+                if (!isPm) continue;
+
+                // Only count completed PM jobs
+                if (!status.Equals("Completed", StringComparison.OrdinalIgnoreCase)) continue;
+
+                // Get customer ID
+                var customerId = "";
+                if (job.TryGetProperty("customer", out var cust) && cust.ValueKind == JsonValueKind.Object)
+                {
+                    if (cust.TryGetProperty("id", out var cid))
+                        customerId = cid.ToString();
+                }
+                if (string.IsNullOrEmpty(customerId)) continue;
+
+                // Track the most recent completed PM date per customer
+                var completedOn = ParseDateTime(job, "completedOn") ?? ParseDateTime(job, "modifiedOn");
+                if (completedOn == null) continue;
+
+                if (!lastPmByCustomer.TryGetValue(customerId, out var existing) || completedOn > existing)
+                    lastPmByCustomer[customerId] = completedOn.Value;
             }
             totalRecords += count;
 
@@ -152,40 +185,6 @@ public class ServiceTitanSyncService
 
         _logger.LogInformation("[ST Sync] Jobs processed={Total} openJobs={Open}", totalRecords, openJobs);
         snapshot.OpenJobCount = openJobs;
-    }
-
-    private async Task SyncRecurringServiceEventsAsync(string token, string stTenantId, DashboardSnapshot snapshot, string from)
-    {
-        var closedStatuses = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Completed", "Canceled" };
-        var today = DateTime.UtcNow.Date;
-        int overduePms = 0, totalRecords = 0;
-        string? continueFrom = from;
-
-        do
-        {
-            var json = await _client.GetRecurringServiceEventsExportAsync(token, stTenantId, continueFrom);
-            var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
-            if (!root.TryGetProperty("data", out var data)) break;
-
-            var count = 0;
-            foreach (var evt in data.EnumerateArray())
-            {
-                count++;
-                var status = evt.TryGetProperty("status", out var s) ? s.GetString() ?? "" : "";
-                if (closedStatuses.Contains(status)) continue;
-                var dueDate = ParseDateTime(evt, "dueDate");
-                if (dueDate.HasValue && dueDate.Value.Date < today) overduePms++;
-            }
-            totalRecords += count;
-
-            var hasMore = root.TryGetProperty("hasMore", out var hm) && hm.GetBoolean();
-            continueFrom = hasMore && root.TryGetProperty("continueFrom", out var cf) ? cf.GetString() : null;
-            if (!hasMore) break;
-        } while (continueFrom != null);
-
-        _logger.LogInformation("[ST Sync] RecurringEvents processed={Total} overduePMs={PMs}", totalRecords, overduePms);
-        snapshot.OverduePmCount = overduePms;
     }
 
     private static decimal ParseDecimal(JsonElement el, string prop)
