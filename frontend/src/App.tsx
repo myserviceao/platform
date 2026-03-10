@@ -5,6 +5,7 @@ import { LoginPage } from '@/pages/App/LoginPage'
 import { RegisterPage } from '@/pages/App/RegisterPage'
 import { DashboardPage } from '@/pages/App/Dashboard/DashboardPage'
 import { AppShell } from '@/components/layout/AppShell'
+import ServiceTitanPage from '@/pages/App/ServiceTitanPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const auth = useAuthProvider()
@@ -31,7 +32,7 @@ function AppRoutes() {
           <Route path="/app/login" element={<LoginPage />} />
           <Route path="/app/register" element={<RegisterPage />} />
 
-          {/* Protected app routes */}
+          {/* Protected */}
           <Route
             path="/app/*"
             element={
@@ -40,7 +41,7 @@ function AppRoutes() {
                   <Routes>
                     <Route index element={<Navigate to="/app/dashboard" replace />} />
                     <Route path="dashboard" element={<DashboardPage />} />
-                    {/* Future routes added here */}
+                    <Route path="servicetitan" element={<ServiceTitanPage />} />
                     <Route path="*" element={<div className="text-muted-foreground text-sm">Coming soon...</div>} />
                   </Routes>
                 </AppShell>
@@ -48,7 +49,6 @@ function AppRoutes() {
             }
           />
 
-          {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
