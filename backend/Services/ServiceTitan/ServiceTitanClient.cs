@@ -40,47 +40,30 @@ public class ServiceTitanClient
         return json.RootElement.GetProperty("access_token").GetString();
     }
 
-    /// GET /accounting/v2/tenant/{tenantId}/export/invoices
-    /// createdOnOrAfter: date filter (e.g. "2026-01-01")
-    /// continueFrom: pagination token from previous response (null for first page)
-    public async Task<string> GetInvoicesExportAsync(string accessToken, string stTenantId, string? createdOnOrAfter = null, string? continueFrom = null)
+    // from = date string (e.g. "2026-01-01") to filter by modifiedOn, OR a continueFrom token for pagination
+    public async Task<string> GetInvoicesExportAsync(string accessToken, string stTenantId, string? from = null)
     {
         var url = $"{BaseUrl}/accounting/v2/tenant/{stTenantId}/export/invoices?includeRecentChanges=true";
-        if (!string.IsNullOrEmpty(createdOnOrAfter))
-            url += $"&createdOnOrAfter={Uri.EscapeDataString(createdOnOrAfter)}";
-        if (!string.IsNullOrEmpty(continueFrom))
-            url += $"&from={Uri.EscapeDataString(continueFrom)}";
-
+        if (!string.IsNullOrEmpty(from))
+            url += $"&from={Uri.EscapeDataString(from)}";
         _logger.LogInformation("[ST] GET invoices url={Url}", url);
         return await GetAsync(accessToken, url);
     }
 
-    /// GET /jpm/v2/tenant/{tenantId}/export/jobs
-    /// createdOnOrAfter: date filter
-    /// continueFrom: pagination token
-    public async Task<string> GetJobsExportAsync(string accessToken, string stTenantId, string? createdOnOrAfter = null, string? continueFrom = null)
+    public async Task<string> GetJobsExportAsync(string accessToken, string stTenantId, string? from = null)
     {
         var url = $"{BaseUrl}/jpm/v2/tenant/{stTenantId}/export/jobs?includeRecentChanges=true";
-        if (!string.IsNullOrEmpty(createdOnOrAfter))
-            url += $"&createdOnOrAfter={Uri.EscapeDataString(createdOnOrAfter)}";
-        if (!string.IsNullOrEmpty(continueFrom))
-            url += $"&from={Uri.EscapeDataString(continueFrom)}";
-
+        if (!string.IsNullOrEmpty(from))
+            url += $"&from={Uri.EscapeDataString(from)}";
         _logger.LogInformation("[ST] GET jobs url={Url}", url);
         return await GetAsync(accessToken, url);
     }
 
-    /// GET /memberships/v2/tenant/{tenantId}/export/recurring-service-events
-    /// createdOnOrAfter: date filter
-    /// continueFrom: pagination token
-    public async Task<string> GetRecurringServiceEventsExportAsync(string accessToken, string stTenantId, string? createdOnOrAfter = null, string? continueFrom = null)
+    public async Task<string> GetRecurringServiceEventsExportAsync(string accessToken, string stTenantId, string? from = null)
     {
         var url = $"{BaseUrl}/memberships/v2/tenant/{stTenantId}/export/recurring-service-events?includeRecentChanges=true";
-        if (!string.IsNullOrEmpty(createdOnOrAfter))
-            url += $"&createdOnOrAfter={Uri.EscapeDataString(createdOnOrAfter)}";
-        if (!string.IsNullOrEmpty(continueFrom))
-            url += $"&from={Uri.EscapeDataString(continueFrom)}";
-
+        if (!string.IsNullOrEmpty(from))
+            url += $"&from={Uri.EscapeDataString(from)}";
         _logger.LogInformation("[ST] GET recurring-service-events url={Url}", url);
         return await GetAsync(accessToken, url);
     }
