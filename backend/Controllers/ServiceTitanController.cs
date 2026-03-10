@@ -59,7 +59,6 @@ public class ServiceTitanController : ControllerBase
             sync = new
             {
                 success = syncResult.Success,
-                jobsSynced = syncResult.JobsSynced,
                 syncedAt = syncResult.SyncedAt,
                 error = syncResult.Error
             }
@@ -83,7 +82,6 @@ public class ServiceTitanController : ControllerBase
 
         return Ok(new
         {
-            jobsSynced = result.JobsSynced,
             syncedAt = result.SyncedAt
         });
     }
