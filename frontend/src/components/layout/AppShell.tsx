@@ -155,7 +155,7 @@ function GlobalSearch() {
           onFocus={() => { if (query.trim()) setOpen(true) }}
           className="grow"
         />
-        <kbd className="kbd kbd-sm text-base-content/30">âK</kbd>
+        <kbd className="kbd kbd-sm text-base-content/30">Ã¢ÂÂK</kbd>
       </div>
 
       {open && (query.trim() || loading) && (
@@ -213,9 +213,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         />
       )}
 
-      {/* ââ Sidebar ââ */}
+      {/* Ã¢ÂÂÃ¢ÂÂ Sidebar Ã¢ÂÂÃ¢ÂÂ */}
       <aside
-        className={`fixed inset-y-0 start-0 z-30 flex h-full w-72 flex-col border-e border-base-content/10 bg-base-100 transition-transform duration-200 lg:relative lg:translate-x-0 ${
+        className={`fixed inset-y-0 start-0 z-30 flex h-full w-72 flex-col border-e border-base-content/10 bg-base-100 transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
