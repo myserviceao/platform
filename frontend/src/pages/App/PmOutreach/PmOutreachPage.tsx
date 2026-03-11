@@ -20,10 +20,6 @@ interface OutreachData {
   customers: OutreachCustomer[]
 }
 
-function fmtDate(d: string | null) {
-  if (!d) return 'Never'
-  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-}
 
 function statusBadge(status: string) {
   switch (status) {
