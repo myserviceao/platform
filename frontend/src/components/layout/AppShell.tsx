@@ -3,21 +3,45 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { useTheme, type Theme } from '@/hooks/useTheme'
 
-const navItems = [
+interface NavItem {
+  label: string
+  icon: string
+  path: string
+}
+
+interface NavGroup {
+  label: string
+  icon: string
+  children: NavItem[]
+}
+
+type NavEntry = NavItem | NavGroup
+
+function isGroup(entry: NavEntry): entry is NavGroup {
+  return 'children' in entry
+}
+
+const navItems: NavEntry[] = [
   {
     label: 'Dashboard',
     icon: 'icon-[tabler--layout-dashboard]',
     path: '/app/dashboard',
   },
   {
-    label: 'PM Tracker',
-    icon: 'icon-[tabler--calendar-check]',
-    path: '/app/pm-tracker',
-  },
-  {
-    label: 'PM Outreach',
-    icon: 'icon-[tabler--send]',
-    path: '/app/pm-outreach',
+    label: 'Maintenance',
+    icon: 'icon-[tabler--tool]',
+    children: [
+      {
+        label: 'PM Tracker',
+        icon: 'icon-[tabler--calendar-check]',
+        path: '/app/pm-tracker',
+      },
+      {
+        label: 'PM Outreach',
+        icon: 'icon-[tabler--send]',
+        path: '/app/pm-outreach',
+      },
+    ],
   },
   {
     label: 'Work Orders',
@@ -57,6 +81,7 @@ interface SearchResult {
 const pageResults: SearchResult[] = [
   { type: 'page', label: 'Dashboard', path: '/app/dashboard' },
   { type: 'page', label: 'PM Tracker', path: '/app/pm-tracker' },
+  { type: 'page', label: 'PM Outreach', path: '/app/pm-outreach' },
   { type: 'page', label: 'Customers', path: '/app/customers' },
   { type: 'page', label: 'Work Orders', path: '/app/work-orders' },
   { type: 'page', label: 'Settings', path: '/app/settings' },
@@ -266,7 +291,34 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <nav className="flex-1 overflow-y-auto p-3">
           <ul className="menu menu-sm gap-0.5 p-0">
             <li className="menu-title text-xs uppercase tracking-wider opacity-50 px-2 pt-2 pb-1">Main</li>
-            {navItems.map((item) => {
+            {navItems.map((entry, idx) => {
+              if (isGroup(entry)) {
+                const groupActive = entry.children.some(c => location.pathname.startsWith(c.path))
+                return (
+                  <li key={idx}>
+                    <details open={groupActive || undefined}>
+                      <summary className={groupActive ? 'text-primary' : ''}>
+                        <span className={`${entry.icon} size-4.5`} />
+                        {entry.label}
+                      </summary>
+                      <ul>
+                        {entry.children.map((child) => {
+                          const childActive = location.pathname.startsWith(child.path)
+                          return (
+                            <li key={child.path}>
+                              <Link to={child.path} onClick={() => setSidebarOpen(false)} className={childActive ? 'menu-active' : ''}>
+                                <span className={`${child.icon} size-4`} />
+                                {child.label}
+                              </Link>
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    </details>
+                  </li>
+                )
+              }
+              const item = entry as NavItem
               const active = location.pathname.startsWith(item.path)
               return (
                 <li key={item.path}>
