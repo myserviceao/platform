@@ -12,8 +12,8 @@ public class Job
     public string JobNumber { get; set; } = "";
     public string Status { get; set; } = "";
     public string? JobTypeName { get; set; }
+    public string? HoldReasonName { get; set; }
 
-    // Amount from ST (total field on job)
     public decimal TotalAmount { get; set; }
 
     public DateTime? CreatedOn { get; set; }
