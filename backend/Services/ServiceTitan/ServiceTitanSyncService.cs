@@ -47,14 +47,18 @@ public class ServiceTitanSyncService
             int pmFound = 0;
 
             string? continueFrom = null;
-            bool hasMore;
-            do
+            bool hasMore = true;
+            while (hasMore)
             {
-                var (jobs, nextToken, more) = await _client.ExportJobsPageAsync(token, stTenantId, continueFrom);
-                continueFrom = nextToken;
-                hasMore = more;
+                var raw = await _client.GetJobsExportAsync(token, stTenantId, continueFrom);
+                var doc = JsonDocument.Parse(raw);
+                var root = doc.RootElement;
+                hasMore = root.TryGetProperty("hasMore", out var hm) && hm.GetBoolean();
+                continueFrom = root.TryGetProperty("continueFrom", out var cf) ? cf.GetString() : null;
 
-                foreach (var job in jobs)
+                if (!root.TryGetProperty("data", out var data)) break;
+
+                foreach (var job in data.EnumerateArray())
                 {
                     // Resolve job type name
                     string? jobTypeName = null;
@@ -64,29 +68,26 @@ public class ServiceTitanSyncService
                     if (jobTypeName == null) continue;
                     if (!PmKeywords.Any(k => jobTypeName.ToLower().Contains(k))) continue;
 
-                    var customerId = job.GetProperty("customerId").GetInt64();
+                    if (!job.TryGetProperty("customerId", out var custProp)) continue;
+                    var customerId = custProp.GetInt64();
 
                     // completedOn ?? createdOn (same as old app: CompletedAt ?? CreatedAt)
                     DateTime? completedOn = null;
-                    if (job.TryGetProperty("completedOn", out var coProp) &&
-                        coProp.ValueKind == JsonValueKind.String &&
-                        DateTime.TryParse(coProp.GetString(), null,
-                            System.Globalization.DateTimeStyles.AssumeUniversal |
-                            System.Globalization.DateTimeStyles.AdjustToUniversal,
-                            out var parsedCompleted))
+                    if (job.TryGetProperty("completedOn", out var coProp) && coProp.ValueKind == JsonValueKind.String)
                     {
-                        completedOn = DateTime.SpecifyKind(parsedCompleted, DateTimeKind.Utc);
+                        if (DateTime.TryParse(coProp.GetString(), null,
+                            System.Globalization.DateTimeStyles.AssumeUniversal |
+                            System.Globalization.DateTimeStyles.AdjustToUniversal, out var pc))
+                            completedOn = DateTime.SpecifyKind(pc, DateTimeKind.Utc);
                     }
 
                     DateTime? createdOn = null;
-                    if (job.TryGetProperty("createdOn", out var crProp) &&
-                        crProp.ValueKind == JsonValueKind.String &&
-                        DateTime.TryParse(crProp.GetString(), null,
-                            System.Globalization.DateTimeStyles.AssumeUniversal |
-                            System.Globalization.DateTimeStyles.AdjustToUniversal,
-                            out var parsedCreated))
+                    if (job.TryGetProperty("createdOn", out var crProp) && crProp.ValueKind == JsonValueKind.String)
                     {
-                        createdOn = DateTime.SpecifyKind(parsedCreated, DateTimeKind.Utc);
+                        if (DateTime.TryParse(crProp.GetString(), null,
+                            System.Globalization.DateTimeStyles.AssumeUniversal |
+                            System.Globalization.DateTimeStyles.AdjustToUniversal, out var pc2))
+                            createdOn = DateTime.SpecifyKind(pc2, DateTimeKind.Utc);
                     }
 
                     var pmDate = completedOn ?? createdOn;
@@ -94,14 +95,14 @@ public class ServiceTitanSyncService
 
                     pmFound++;
 
-                    // Keep the most recent PM date per customer
                     if (!pmDates.TryGetValue(customerId, out var existing) || pmDate > existing)
                         pmDates[customerId] = pmDate.Value;
                 }
 
-            } while (hasMore);
+                if (!hasMore || continueFrom == null) break;
+            }
 
-            _logger.LogInformation("[Sync] tenantId={TenantId} pmFound={PmFound}", tenantId, pmFound);
+            _logger.LogInformation("[Sync] tenantId={TenantId} pmFound={PmFound} uniqueCustomers={Customers}", tenantId, pmFound, pmDates.Count);
 
             // 4. Upsert PmCustomers
             foreach (var (stCustomerId, lastPmDate) in pmDates)
@@ -139,14 +140,14 @@ public class ServiceTitanSyncService
 
             await _db.SaveChangesAsync();
 
-            // Update snapshot
+            // Update snapshot timestamp
             var snapshot = await _db.DashboardSnapshots.FirstOrDefaultAsync(s => s.TenantId == tenantId);
             if (snapshot == null)
             {
                 snapshot = new DashboardSnapshot { TenantId = tenantId };
                 _db.DashboardSnapshots.Add(snapshot);
             }
-            snapshot.SyncedAt = DateTime.UtcNow;
+            snapshot.SnapshotTakenAt = DateTime.UtcNow;
             await _db.SaveChangesAsync();
 
             return new SyncResult { Success = true, SyncedAt = DateTime.UtcNow };
