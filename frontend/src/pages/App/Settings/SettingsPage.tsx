@@ -2,10 +2,19 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTheme, type Theme } from '@/hooks/useTheme'
 import { useAuth } from '@/hooks/useAuth'
 
-const THEMES: { value: Theme; label: string; description: string; icon: string }[] = [
-  { value: 'dark', label: 'Dark', description: 'Easy on the eyes, great for night work.', icon: 'icon-[tabler--moon]' },
-  { value: 'light', label: 'Light', description: 'Clean and bright for daytime use.', icon: 'icon-[tabler--sun]' },
-  { value: 'corporate', label: 'Corporate', description: 'Professional blue tones for presentations.', icon: 'icon-[tabler--building]' },
+const THEMES: { value: Theme; label: string; description: string; colors: [string, string, string] }[] = [
+  { value: 'dark', label: 'Dark', description: 'Default dark theme with purple accents', colors: ['#1d232a', '#661ae6', '#2a323c'] },
+  { value: 'night', label: 'Night', description: 'Deep navy with blue accents', colors: ['#0f1729', '#38bdf8', '#1e293b'] },
+  { value: 'dim', label: 'Dim', description: 'Warm dark with orange accents', colors: ['#1c1917', '#f59e0b', '#292524'] },
+  { value: 'dracula', label: 'Dracula', description: 'Rich dark with pink and purple', colors: ['#282a36', '#ff79c6', '#44475a'] },
+  { value: 'synthwave', label: 'Synthwave', description: 'Retro neon with vibrant colors', colors: ['#1a103d', '#e779c1', '#2d1b69'] },
+  { value: 'sunset', label: 'Sunset', description: 'Warm tones with amber highlights', colors: ['#1c1917', '#f97316', '#292524'] },
+  { value: 'forest', label: 'Forest', description: 'Natural greens, earthy feel', colors: ['#171212', '#22c55e', '#1c1917'] },
+  { value: 'luxury', label: 'Luxury', description: 'Elegant dark with gold accents', colors: ['#09090b', '#dca54c', '#171717'] },
+  { value: 'light', label: 'Light', description: 'Clean and bright for daytime', colors: ['#ffffff', '#661ae6', '#f2f2f2'] },
+  { value: 'corporate', label: 'Corporate', description: 'Professional with blue tones', colors: ['#ffffff', '#4b6bfb', '#f0f0f0'] },
+  { value: 'soft', label: 'Soft', description: 'Gentle pastels, easy reading', colors: ['#f9fafb', '#6366f1', '#f3f4f6'] },
+  { value: 'gourmet', label: 'Gourmet', description: 'Refined dark with warm tones', colors: ['#1a1a2e', '#e94560', '#16213e'] },
 ]
 
 interface Vendor { id: number; name: string; contactName?: string; phone?: string; email?: string }
@@ -172,23 +181,28 @@ export function SettingsPage() {
             <h2 className="text-base-content font-semibold text-base">Appearance</h2>
             <p className="text-base-content/60 text-sm mt-0.5">Choose how MyServiceAO looks for you.</p>
           </div>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 grid-cols-3 sm:grid-cols-4 lg:grid-cols-6">
             {THEMES.map((t) => {
               const active = theme === t.value
               return (
                 <button
                   key={t.value}
                   onClick={() => setTheme(t.value)}
-                  className={`rounded-box border-2 p-4 text-left transition-all ${
-                    active ? 'border-primary bg-primary/5' : 'border-base-content/10 hover:border-base-content/30 bg-base-200/50'
+                  className={`rounded-box border-2 p-3 text-center transition-all ${
+                    active ? 'border-primary ring-2 ring-primary/30' : 'border-base-content/10 hover:border-base-content/30'
                   }`}
                 >
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className={`${t.icon} size-5 ${active ? 'text-primary' : 'text-base-content/60'}`} />
-                    <span className={`font-medium text-sm ${active ? 'text-primary' : 'text-base-content'}`}>{t.label}</span>
-                    {active && <span className="icon-[tabler--check] size-4 text-primary ms-auto" />}
+                  <div className="flex justify-center gap-1 mb-2">
+                    {t.colors.map((c, i) => (
+                      <div
+                        key={i}
+                        className={`rounded-full ${i === 1 ? 'size-6' : 'size-4'}`}
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
                   </div>
-                  <p className="text-xs text-base-content/50">{t.description}</p>
+                  <div className={`text-xs font-medium ${active ? 'text-primary' : 'text-base-content/70'}`}>{t.label}</div>
+                  {active && <span className="icon-[tabler--check] size-3.5 text-primary mx-auto mt-1 block" />}
                 </button>
               )
             })}
