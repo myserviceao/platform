@@ -51,7 +51,7 @@ const navItems: NavEntry[] = [
   {
     label: 'Work Orders',
     icon: 'icon-[tabler--clipboard-list]',
-    path: '/app/work-orders',
+    path: '/app/wo-board',
   },
   {
     label: 'Customers',
