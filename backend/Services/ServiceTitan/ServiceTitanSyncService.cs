@@ -42,7 +42,7 @@ public class ServiceTitanSyncService
             _logger.LogInformation("[Sync] tenantId={TenantId} customers={Count}", tenantId, customerNameMap.Count);
 
             // 3. Export all jobs and find PM jobs
-            // Use completedOn ?? createdOn — same logic as original PatriotMechanical app
+            // Use completedOn ?? createdOn â same logic as original PatriotMechanical app
             var pmDates = new Dictionary<long, DateTime>();
             int pmFound = 0;
 
@@ -177,7 +177,7 @@ public class ServiceTitanSyncService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ey, "[Sync] Failed for tenantId={TenantId}", tenantId);
+            _logger.LogError(ex, "[Sync] Failed for tenantId={TenantId}", tenantId);
             return new SyncResult { Success = false, Error = ex.Message };
         }
     }
