@@ -65,6 +65,66 @@ public class ServiceTitanSyncService
             }
             await _db.SaveChangesAsync();
 
+
+            // 3b. Sync Customer Contacts (phone/email)
+            string? contactContinue = null;
+            bool contactHasMore = true;
+            int contactsSynced = 0;
+            while (contactHasMore)
+            {
+                var raw = await _client.GetCustomerContactsExportAsync(token, stTenantId, contactContinue);
+                var doc = JsonDocument.Parse(raw);
+                var root = doc.RootElement;
+                contactHasMore = root.TryGetProperty("hasMore", out var chm) && chm.GetBoolean();
+                contactContinue = root.TryGetProperty("continueFrom", out var ccf) ? ccf.GetString() : null;
+
+                if (!root.TryGetProperty("data", out var data)) break;
+
+                foreach (var contact in data.EnumerateArray())
+                {
+                    if (contact.TryGetProperty("active", out var activeProp) && !activeProp.GetBoolean())
+                        continue;
+
+                    long customerId = 0;
+                    if (contact.TryGetProperty("customerId", out var cidProp))
+                        customerId = cidProp.GetInt64();
+                    if (customerId == 0) continue;
+
+                    string contactType = "";
+                    if (contact.TryGetProperty("type", out var typeProp) && typeProp.ValueKind == JsonValueKind.String)
+                        contactType = typeProp.GetString() ?? "";
+
+                    string contactValue = "";
+                    if (contact.TryGetProperty("value", out var valProp) && valProp.ValueKind == JsonValueKind.String)
+                        contactValue = valProp.GetString() ?? "";
+
+                    if (string.IsNullOrEmpty(contactValue)) continue;
+
+                    var customer = await _db.Customers
+                        .FirstOrDefaultAsync(c => c.TenantId == tenantId && c.StCustomerId == customerId);
+
+                    if (customer != null)
+                    {
+                        if (contactType.Equals("MobilePhone", StringComparison.OrdinalIgnoreCase)
+                            || contactType.Equals("Phone", StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (string.IsNullOrEmpty(customer.Phone) || contactType.Equals("MobilePhone", StringComparison.OrdinalIgnoreCase))
+                                customer.Phone = contactValue;
+                        }
+                        else if (contactType.Equals("Email", StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (string.IsNullOrEmpty(customer.Email))
+                                customer.Email = contactValue;
+                        }
+                        contactsSynced++;
+                    }
+                }
+
+                await _db.SaveChangesAsync();
+                if (!contactHasMore || contactContinue == null) break;
+            }
+            _logger.LogInformation("[Sync] tenantId={TenantId} contactsSynced={Count}", tenantId, contactsSynced);
+
             // 4. Export all Jobs
             var pmDates = new Dictionary<long, DateTime>();
             int pmFound = 0;
