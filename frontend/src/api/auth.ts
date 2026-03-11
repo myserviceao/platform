@@ -4,6 +4,7 @@ export interface AuthUser {
   firstName: string
   lastName: string
   role: string
+  title: string | null
   tenant: {
     id: number
     name: string
