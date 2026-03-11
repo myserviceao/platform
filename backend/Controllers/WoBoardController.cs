@@ -110,7 +110,8 @@ public class WoBoardController : ControllerBase
             holdReasonCount = holdReasons.Count,
             columns = resultColumns
         });
-    
+    }
+
     /// <summary>
     /// GET /api/wo-board/holds
     /// Returns on-hold jobs grouped by hold reason for the Hold Board.
@@ -185,5 +186,4 @@ public class WoBoardController : ControllerBase
         });
     }
 
-}
 }
