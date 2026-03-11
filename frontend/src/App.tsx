@@ -14,6 +14,7 @@ import { ApPage } from '@/pages/App/Ap/ApPage'
 import { PmOutreachPage } from '@/pages/App/PmOutreach/PmOutreachPage'
 import { PmPlannerPage } from '@/pages/App/PmPlanner/PmPlannerPage'
 import { WoBoardPage } from '@/pages/App/WoBoard/WoBoardPage'
+import { HoldBoardPage } from '@/pages/App/HoldBoard/HoldBoardPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const auth = useAuthProvider()
@@ -53,6 +54,7 @@ function AppRoutes() {
                       <Route path="pm-outreach" element={<PmOutreachPage />} />
                       <Route path="pm-planner" element={<PmPlannerPage />} />
                       <Route path="wo-board" element={<WoBoardPage />} />
+                      <Route path="hold-board" element={<HoldBoardPage />} />
                       <Route path="ap" element={<ApPage />} />
                       <Route path="settings" element={<SettingsPage />} />
                       <Route path="customers" element={<CustomersPage />} />
