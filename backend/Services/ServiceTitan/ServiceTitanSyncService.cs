@@ -261,7 +261,7 @@ public class ServiceTitanSyncService
                     }
 
                     DateTime invoiceDate = DateTime.MinValue;
-                    if (inv.TryGetProperty("date", out var dateProp) && dateProp.ValueKind == JsonValueKind.String)
+                    if (inv.TryGetProperty("invoiceDate", out var dateProp) && dateProp.ValueKind == JsonValueKind.String)
                         if (DateTime.TryParse(dateProp.GetString(), null,
                             System.Globalization.DateTimeStyles.AssumeUniversal |
                             System.Globalization.DateTimeStyles.AdjustToUniversal, out var parsedDate))
