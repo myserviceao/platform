@@ -128,6 +128,14 @@ public class ServiceTitanClient
 
 
 
+
+    public async Task<string> GetJobHoldReasonsAsync(string accessToken, string stTenantId, int page = 1)
+    {
+        var url = $"{BaseUrl}/jpm/v2/tenant/{stTenantId}/job-hold-reasons?page={page}&pageSize=200&active=True";
+        _logger.LogInformation("[ST] GET job-hold-reasons page={Page}", page);
+        return await GetAsync(accessToken, url);
+    }
+
     public async Task<string> GetLocationsExportAsync(string accessToken, string stTenantId, string? from = null)
     {
         var url = $"{BaseUrl}/crm/v2/tenant/{stTenantId}/export/locations";
