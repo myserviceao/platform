@@ -77,7 +77,6 @@ export function ApPage() {
   }
 
   const unpaid = bills.filter(b => !b.isPaid)
-  const paid = bills.filter(b => b.isPaid)
   const displayed = showPaid ? bills : unpaid
   const totalOwed = unpaid.reduce((s, b) => s + b.amount, 0)
 
