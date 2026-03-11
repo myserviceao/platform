@@ -232,14 +232,14 @@ export function DashboardPage() {
           borderColor="border-t-cyan-400"
           label="Total AP"
           value={fmt(d?.totalAP ?? 0)}
-          sub={(d?.totalAP ?? 0) > 0 ? `next due ${d?.apNextDueDays ?? 0}d` : 'nothing owed'}"
+          sub={(d?.totalAP ?? 0) > 0 ? `next due ${d?.apNextDueDays ?? 0}d` : 'nothing owed'}
         />
         <StatTile
           borderColor="border-t-emerald-400"
           label="Net Position"
-          value={fmt(arTotal)}
-          sub={arTotal > 0 ? `AR covers AP —` : '—'}
-          subColor="text-success"
+          value={fmt(d?.netPosition ?? 0)}
+          sub={(d?.totalAP ?? 0) > 0 ? `AR covers AP ${((arTotal / (d?.totalAP ?? 1))).toFixed(1)}x` : '—'}
+          subColor={(d?.netPosition ?? 0) >= 0 ? 'text-success' : 'text-error'}
         />
         <StatTile
           borderColor="border-t-green-500"
@@ -452,7 +452,7 @@ export function DashboardPage() {
           <div className="card-body p-0">
             <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-base-200">
               <h3 className="font-semibold text-sm text-base-content">Accounts Payable</h3>
-              <a href="/app/ap" className="text-xs text-primary hover:underline">View All &rarr;</a>
+              <a href="/app/ap" className="text-xs text-primary hover:underline">View All →</a>
             </div>
             <div className="overflow-auto max-h-64">
               {apData?.byVendor && apData.byVendor.length > 0 ? (
