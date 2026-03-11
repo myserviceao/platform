@@ -5,13 +5,13 @@ using MyServiceAO.Services.ServiceTitan;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ── Database ──────────────────────────────────────────────────────────────────
+// ââ Database ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
 string connectionString;
 
 if (!string.IsNullOrEmpty(databaseUrl))
 {
-    // Railway provides DATABASE_URL in postgres:// format — convert to Npgsql format
+    // Railway provides DATABASE_URL in postgres:// format â convert to Npgsql format
     var uri = new Uri(databaseUrl);
     var userInfo = uri.UserInfo.Split(':');
     connectionString = $"Host={uri.Host};Port={uri.Port};Database={uri.AbsolutePath.TrimStart('/')};Username={userInfo[0]};Password={userInfo[1]};SSL Mode=Require;Trust Server Certificate=true";
@@ -25,7 +25,7 @@ else
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString));
 
-// ── Auth / Session ────────────────────────────────────────────────────────────
+// ââ Auth / Session ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddSession(options =>
 {
@@ -36,17 +36,17 @@ builder.Services.AddSession(options =>
     options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
 });
 
-// ── Services ──────────────────────────────────────────────────────────────────
+// ââ Services ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddHttpClient<ServiceTitanClient>();
 builder.Services.AddScoped<ServiceTitanOAuthService>();
 builder.Services.AddScoped<ServiceTitanSyncService>();
 builder.Services.AddHostedService<SyncSchedulerService>();
 
-// ── Controllers ───────────────────────────────────────────────────────────────
+// ââ Controllers âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 builder.Services.AddControllers();
 
-// ── CORS (dev only) ───────────────────────────────────────────────────────────
+// ââ CORS (dev only) âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("DevCors", policy =>
@@ -60,7 +60,7 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// ── Startup migrations ────────────────────────────────────────────────────────
+// ââ Startup migrations ââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -68,7 +68,7 @@ using (var scope = app.Services.CreateScope())
     await DbMigrations.RunAsync(db);
 }
 
-// ── Middleware pipeline ───────────────────────────────────────────────────────
+// ââ Middleware pipeline âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 if (app.Environment.IsDevelopment())
 {
     app.UseCors("DevCors");
@@ -80,7 +80,8 @@ app.UseStaticFiles();
 app.UseRouting();
 app.MapControllers();
 
-// ── SPA fallback — serve index.html for all non-API routes ───────────────────
+// ââ SPA fallback â serve index.html for all non-API routes âââââââââââââââââââ
 app.MapFallbackToFile("index.html");
 
 app.Run();
+// cache-bust: 1773239314213
