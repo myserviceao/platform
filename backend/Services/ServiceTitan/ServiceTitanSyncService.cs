@@ -252,6 +252,11 @@ public class ServiceTitanSyncService
             }
             _logger.LogInformation("[Sync] tenantId={TenantId} holdReasonsSynced={Count}", tenantId, holdReasonsSynced);
 
+            // Build holdReason ID -> Name map for matching during job sync
+            var holdReasonIdMap = await _db.HoldReasons
+                .Where(h => h.TenantId == tenantId && h.Active)
+                .ToDictionaryAsync(h => h.StHoldReasonId, h => h.Name);
+
             // 4. Export all Jobs
             var pmDates = new Dictionary<long, DateTime>();
             int pmFound = 0;
@@ -288,6 +293,14 @@ public class ServiceTitanSyncService
                     if (job.TryGetProperty("jobStatus", out var sProp) && sProp.ValueKind == JsonValueKind.String)
                         status = sProp.GetString() ?? "";
 
+                    long? holdReasonId = null;
+                    if (job.TryGetProperty("holdReasonId", out var hrProp) && hrProp.ValueKind == JsonValueKind.Number)
+                        holdReasonId = hrProp.GetInt64();
+
+                    string? holdReasonName = null;
+                    if (holdReasonId.HasValue && holdReasonIdMap.TryGetValue(holdReasonId.Value, out var hrName))
+                        holdReasonName = hrName;
+
                     string? jobTypeName = null;
                     if (job.TryGetProperty("jobTypeId", out var jtProp) && jtProp.ValueKind == JsonValueKind.Number)
                         jobTypeMap.TryGetValue(jtProp.GetInt64(), out jobTypeName);
@@ -323,6 +336,7 @@ public class ServiceTitanSyncService
                             JobNumber = jobNumber,
                             Status = status,
                             JobTypeName = jobTypeName,
+                            HoldReasonName = holdReasonName,
                             TotalAmount = totalAmount,
                             CreatedOn = createdOn,
                             UpdatedAt = DateTime.UtcNow
@@ -335,6 +349,7 @@ public class ServiceTitanSyncService
                         existingJob.JobNumber = jobNumber;
                         existingJob.Status = status;
                         existingJob.JobTypeName = jobTypeName;
+                        existingJob.HoldReasonName = holdReasonName;
                         existingJob.TotalAmount = totalAmount;
                         existingJob.UpdatedAt = DateTime.UtcNow;
                     }
