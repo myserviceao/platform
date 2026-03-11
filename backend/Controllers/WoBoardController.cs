@@ -186,30 +186,4 @@ public class WoBoardController : ControllerBase
         });
     }
 
-    /// <summary>
-    /// GET /api/wo-board/debug-hold/{stJobId}
-    /// Debug: shows the raw ST job history for a hold job
-    /// </summary>
-    [HttpGet("debug-hold/{stJobId}")]
-    public async Task<IActionResult> DebugHoldReason(long stJobId)
-    {
-        var tenantId = HttpContext.Session.GetInt32("tenantId");
-        if (tenantId == null) return Unauthorized();
-
-        var tenant = await _db.Tenants.FindAsync(tenantId.Value);
-        if (tenant == null) return NotFound();
-
-        try
-        {
-            var stClient = HttpContext.RequestServices.GetRequiredService<MyServiceAO.Services.ServiceTitan.ServiceTitanClient>();
-            var authService = HttpContext.RequestServices.GetRequiredService<MyServiceAO.Services.ServiceTitan.ServiceTitanAuthService>();
-            var token = await authService.GetAccessTokenAsync(tenant.StClientId, tenant.StClientSecret);
-            var raw = await stClient.GetJobHistoryAsync(token, tenant.StTenantId, stJobId);
-            return Content(raw, "application/json");
-        }
-        catch (Exception ex)
-        {
-            return Ok(new { error = ex.Message });
-        }
-    }
 }
