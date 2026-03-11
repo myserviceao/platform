@@ -65,6 +65,37 @@ public class ServiceTitanSyncService
             }
             await _db.SaveChangesAsync();
 
+
+            // 3b. Sync Job Hold Reasons
+            int holdReasonsSynced = 0;
+            try
+            {
+                var holdRaw = await _client.GetJobHoldReasonsAsync(token, stTenantId);
+                var holdDoc = JsonDocument.Parse(holdRaw);
+                if (holdDoc.RootElement.TryGetProperty("data", out var holdArr))
+                {
+                    foreach (var hr in holdArr.EnumerateArray())
+                    {
+                        var stId = hr.GetProperty("id").GetInt64();
+                        var name = hr.TryGetProperty("name", out var nProp) ? nProp.GetString() ?? "" : "";
+                        var active = hr.TryGetProperty("active", out var aProp) && aProp.GetBoolean();
+                        var existingHr = await _db.HoldReasons
+                            .FirstOrDefaultAsync(h => h.TenantId == tenantId && h.StHoldReasonId == stId);
+                        if (existingHr == null)
+                            _db.HoldReasons.Add(new HoldReason { TenantId = tenantId, StHoldReasonId = stId, Name = name, Active = active, UpdatedAt = DateTime.UtcNow });
+                        else { existingHr.Name = name; existingHr.Active = active; existingHr.UpdatedAt = DateTime.UtcNow; }
+                        holdReasonsSynced++;
+                    }
+                    await _db.SaveChangesAsync();
+                }
+            }
+            catch (Exception ex) { _logger.LogWarning(ex, "[Sync] Failed to sync hold reasons"); }
+            _logger.LogInformation("[Sync] holdReasonsSynced={Count}", holdReasonsSynced);
+
+            var holdReasonIdMap = await _db.HoldReasons
+                .Where(h => h.TenantId == tenantId && h.Active)
+                .ToDictionaryAsync(h => h.StHoldReasonId, h => h.Name);
+
             // 4. Export all Jobs
             var pmDates = new Dictionary<long, DateTime>();
             int pmFound = 0;
@@ -177,24 +208,18 @@ public class ServiceTitanSyncService
 
             _logger.LogInformation("[Sync] tenantId={TenantId} pmFound={PmFound} uniquePmCustomers={Count}", tenantId, pmFound, pmDates.Count);
 
-}
 
-            // 4c. Resolve hold reasons using the jobs LIST endpoint (not export)
-            // The list endpoint (GET /jobs) returns holdReasonId, the export doesn't
+            // 4c. Resolve hold reasons using jobs LIST endpoint (GET /jobs returns holdReasonId)
             var unresolvedHoldJobs = await _db.Jobs
                 .Where(j => j.TenantId == tenantId && j.Status == "Hold" && j.HoldReasonName == null)
                 .ToListAsync();
-
             if (unresolvedHoldJobs.Count > 0 && holdReasonIdMap.Count > 0)
             {
-                _logger.LogInformation("[Sync] Resolving {Count} hold reasons via jobs list endpoint", unresolvedHoldJobs.Count);
+                _logger.LogInformation("[Sync] Resolving {Count} hold reasons via list endpoint", unresolvedHoldJobs.Count);
                 int resolved = 0;
-
-                // Query hold jobs from the list endpoint (returns holdReasonId)
                 int listPage = 1;
                 bool listHasMore = true;
                 var holdReasonsByJobId = new Dictionary<long, long>();
-
                 while (listHasMore)
                 {
                     try
@@ -202,25 +227,30 @@ public class ServiceTitanSyncService
                         var listRaw = await _client.GetJobsByStatusAsync(token, stTenantId, "Hold", listPage);
                         var listDoc = JsonDocument.Parse(listRaw);
                         var listRoot = listDoc.RootElement;
-
                         listHasMore = listRoot.TryGetProperty("hasMore", out var lhm) && lhm.GetBoolean();
-
                         if (listRoot.TryGetProperty("data", out var listData))
                         {
                             foreach (var lj in listData.EnumerateArray())
                             {
                                 var ljId = lj.GetProperty("id").GetInt64();
                                 if (lj.TryGetProperty("holdReasonId", out var ljHr) && ljHr.ValueKind == JsonValueKind.Number)
-                                {
                                     holdReasonsByJobId[ljId] = ljHr.GetInt64();
-                                }
                             }
                         }
-                        else
-                        {
-                            break;
-                        }
-
+                        else { break; }
+                        listPage++;
+                    }
+                    catch (Exception ex) { _logger.LogWarning(ex, "[Sync] Hold jobs list page {P} failed", listPage); break; }
+                }
+                _logger.LogInformation("[Sync] Found {Count} hold reasons from list endpoint", holdReasonsByJobId.Count);
+                foreach (var hj in unresolvedHoldJobs)
+                {
+                    if (holdReasonsByJobId.TryGetValue(hj.StJobId, out var hrId) && holdReasonIdMap.TryGetValue(hrId, out var reasonName))
+                    { hj.HoldReasonName = reasonName; resolved++; }
+                }
+                if (resolved > 0) await _db.SaveChangesAsync();
+                _logger.LogInformation("[Sync] Resolved {R}/{T} hold reasons", resolved, unresolvedHoldJobs.Count);
+            }
 
             // 5. Upsert PmCustomers
             foreach (var (stCustomerId, lastPmDate) in pmDates)
@@ -533,45 +563,14 @@ public class ServiceTitanSyncService
             return new SyncResult { Success = false, Error = ex.Message };
         }
     }
-}
 
-
-    }
-
-    public async Task<string> GetRawApptExportAsync(int tenantId)
+    public async Task<string> GetJobHistoryRawAsync(int tenantId, long stJobId)
     {
         var token = await _oauth.GetValidTokenAsync(tenantId);
         if (token == null) return "{}";
         var tenant = await _db.Tenants.FindAsync(tenantId);
         if (tenant == null) return "{}";
-        return await _client.GetAppointmentsExportAsync(token, tenant.StTenantId);
-    }
-
-    public async Task<string> GetHoldJobsRawAsync(int tenantId)
-    {
-        var token = await _oauth.GetValidTokenAsync(tenantId);
-        if (token == null) return "{}";
-        var tenant = await _db.Tenants.FindAsync(tenantId);
-        if (tenant == null) return "{}";
-        return await _client.GetJobsByStatusAsync(token, tenant.StTenantId, "Hold");
-    }
-
-    public async Task<string> GetAppointmentRawAsync(int tenantId, long appointmentId)
-    {
-        var token = await _oauth.GetValidTokenAsync(tenantId);
-        if (token == null) return "{}";
-        var tenant = await _db.Tenants.FindAsync(tenantId);
-        if (tenant == null) return "{}";
-        return await _client.GetAppointmentAsync(token, tenant.StTenantId, appointmentId);
-    }
-
-    public async Task<string> GetRawJobExportAsync(int tenantId)
-    {
-        var token = await _oauth.GetValidTokenAsync(tenantId);
-        if (token == null) return "{}";
-        var tenant = await _db.Tenants.FindAsync(tenantId);
-        if (tenant == null) return "{}";
-        return await _client.GetJobsExportAsync(token, tenant.StTenantId);
+        return await _client.GetJobHistoryAsync(token, tenant.StTenantId, stJobId);
     }
 
     public async Task<string> GetJobRawAsync(int tenantId, long stJobId)
@@ -583,19 +582,43 @@ public class ServiceTitanSyncService
         return await _client.GetJobAsync(token, tenant.StTenantId, stJobId);
     }
 
-    public async Task<string> GetJobHistoryRawAsync(int tenantId, long stJobId)
+    public async Task<string> GetRawJobExportAsync(int tenantId)
     {
         var token = await _oauth.GetValidTokenAsync(tenantId);
         if (token == null) return "{}";
         var tenant = await _db.Tenants.FindAsync(tenantId);
         if (tenant == null) return "{}";
-        return await _client.GetJobHistoryAsync(token, tenant.StTenantId, stJobId);
+        return await _client.GetJobsExportAsync(token, tenant.StTenantId);
     }
+
+    public async Task<string> GetHoldJobsRawAsync(int tenantId)
+    {
+        var token = await _oauth.GetValidTokenAsync(tenantId);
+        if (token == null) return "{}";
+        var tenant = await _db.Tenants.FindAsync(tenantId);
+        if (tenant == null) return "{}";
+        return await _client.GetJobsByStatusAsync(token, tenant.StTenantId, "Hold");
+    }
+
+    public async Task<string> GetRawApptExportAsync(int tenantId)
+    {
+        var token = await _oauth.GetValidTokenAsync(tenantId);
+        if (token == null) return "{}";
+        var tenant = await _db.Tenants.FindAsync(tenantId);
+        if (tenant == null) return "{}";
+        return await _client.GetAppointmentsExportAsync(token, tenant.StTenantId);
+    }
+
+    public async Task<string> GetAppointmentRawAsync(int tenantId, long appointmentId)
+    {
+        var token = await _oauth.GetValidTokenAsync(tenantId);
+        if (token == null) return "{}";
+        var tenant = await _db.Tenants.FindAsync(tenantId);
+        if (tenant == null) return "{}";
+        return await _client.GetAppointmentAsync(token, tenant.StTenantId, appointmentId);
+    }
+
 }
-
-
-
-
 
 public class SyncResult
 {
