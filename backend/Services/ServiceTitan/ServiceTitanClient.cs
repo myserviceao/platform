@@ -133,6 +133,14 @@ public class ServiceTitanClient
 
 
 
+
+    public async Task<string> GetAppointmentsExportAsync(string accessToken, string stTenantId, string? from = null)
+    {
+        var url = $"{BaseUrl}/jpm/v2/tenant/{stTenantId}/export/appointments";
+        if (from != null) url += $"?from={from}";
+        return await GetAsync(accessToken, url);
+    }
+
     public async Task<string> GetJobsByStatusAsync(string accessToken, string stTenantId, string status, int page = 1)
     {
         var url = $"{BaseUrl}/jpm/v2/tenant/{stTenantId}/jobs?status={status}&page={page}&pageSize=50";
