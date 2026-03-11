@@ -65,198 +65,6 @@ public class ServiceTitanSyncService
             }
             await _db.SaveChangesAsync();
 
-
-            // 3b. Sync Customer Contacts (phone/email)
-            string? contactContinue = null;
-            bool contactHasMore = true;
-            int contactsSynced = 0;
-            while (contactHasMore)
-            {
-                var raw = await _client.GetCustomerContactsExportAsync(token, stTenantId, contactContinue);
-                var doc = JsonDocument.Parse(raw);
-                var root = doc.RootElement;
-                contactHasMore = root.TryGetProperty("hasMore", out var chm) && chm.GetBoolean();
-                contactContinue = root.TryGetProperty("continueFrom", out var ccf) ? ccf.GetString() : null;
-
-                if (!root.TryGetProperty("data", out var data)) break;
-
-                foreach (var contact in data.EnumerateArray())
-                {
-                    if (contact.TryGetProperty("active", out var activeProp) && !activeProp.GetBoolean())
-                        continue;
-
-                    long customerId = 0;
-                    if (contact.TryGetProperty("customerId", out var cidProp))
-                        customerId = cidProp.GetInt64();
-                    if (customerId == 0) continue;
-
-                    string contactType = "";
-                    if (contact.TryGetProperty("type", out var typeProp) && typeProp.ValueKind == JsonValueKind.String)
-                        contactType = typeProp.GetString() ?? "";
-
-                    string contactValue = "";
-                    if (contact.TryGetProperty("value", out var valProp) && valProp.ValueKind == JsonValueKind.String)
-                        contactValue = valProp.GetString() ?? "";
-
-                    if (string.IsNullOrEmpty(contactValue)) continue;
-
-                    var customer = await _db.Customers
-                        .FirstOrDefaultAsync(c => c.TenantId == tenantId && c.StCustomerId == customerId);
-
-                    if (customer != null)
-                    {
-                        if (contactType.Equals("MobilePhone", StringComparison.OrdinalIgnoreCase)
-                            || contactType.Equals("Phone", StringComparison.OrdinalIgnoreCase))
-                        {
-                            if (string.IsNullOrEmpty(customer.Phone) || contactType.Equals("MobilePhone", StringComparison.OrdinalIgnoreCase))
-                                customer.Phone = contactValue;
-                        }
-                        else if (contactType.Equals("Email", StringComparison.OrdinalIgnoreCase))
-                        {
-                            if (string.IsNullOrEmpty(customer.Email))
-                                customer.Email = contactValue;
-                        }
-                        contactsSynced++;
-                    }
-                }
-
-                await _db.SaveChangesAsync();
-                if (!contactHasMore || contactContinue == null) break;
-            }
-            _logger.LogInformation("[Sync] tenantId={TenantId} contactsSynced={Count}", tenantId, contactsSynced);
-
-
-            // 3c. Sync Customer Locations (addresses for PM planning)
-            string? locContinue = null;
-            bool locHasMore = true;
-            int locSynced = 0;
-            while (locHasMore)
-            {
-                var raw = await _client.GetLocationsExportAsync(token, stTenantId, locContinue);
-                var doc = JsonDocument.Parse(raw);
-                var root = doc.RootElement;
-                locHasMore = root.TryGetProperty("hasMore", out var lhm) && lhm.GetBoolean();
-                locContinue = root.TryGetProperty("continueFrom", out var lcf) ? lcf.GetString() : null;
-
-                if (!root.TryGetProperty("data", out var data)) break;
-
-                foreach (var loc in data.EnumerateArray())
-                {
-                    if (loc.TryGetProperty("active", out var activeProp) && !activeProp.GetBoolean())
-                        continue;
-
-                    var stLocId = loc.GetProperty("id").GetInt64();
-                    long customerId = 0;
-                    if (loc.TryGetProperty("customerId", out var cidProp))
-                        customerId = cidProp.GetInt64();
-
-                    string locName = "";
-                    if (loc.TryGetProperty("name", out var nameProp) && nameProp.ValueKind == JsonValueKind.String)
-                        locName = nameProp.GetString() ?? "";
-
-                    string street = "", city = "", state = "", zip = "";
-                    if (loc.TryGetProperty("address", out var addrObj) && addrObj.ValueKind == JsonValueKind.Object)
-                    {
-                        if (addrObj.TryGetProperty("street", out var sProp)) street = sProp.GetString() ?? "";
-                        if (addrObj.TryGetProperty("city", out var cProp)) city = cProp.GetString() ?? "";
-                        if (addrObj.TryGetProperty("state", out var stProp)) state = stProp.GetString() ?? "";
-                        if (addrObj.TryGetProperty("zip", out var zProp)) zip = zProp.GetString() ?? "";
-                    }
-
-                    if (string.IsNullOrWhiteSpace(street)) continue;
-
-                    customerNameMap.TryGetValue(customerId, out var custName);
-
-                    var existing = await _db.CustomerLocations
-                        .FirstOrDefaultAsync(l => l.TenantId == tenantId && l.StLocationId == stLocId);
-
-                    if (existing == null)
-                    {
-                        _db.CustomerLocations.Add(new Models.CustomerLocation
-                        {
-                            TenantId = tenantId,
-                            StLocationId = stLocId,
-                            StCustomerId = customerId,
-                            CustomerName = custName ?? locName,
-                            LocationName = locName,
-                            Street = street,
-                            City = city,
-                            State = state,
-                            Zip = zip,
-                            UpdatedAt = DateTime.UtcNow
-                        });
-                    }
-                    else
-                    {
-                        existing.StCustomerId = customerId;
-                        existing.CustomerName = custName ?? existing.CustomerName;
-                        existing.LocationName = locName;
-                        existing.Street = street;
-                        existing.City = city;
-                        existing.State = state;
-                        existing.Zip = zip;
-                        existing.UpdatedAt = DateTime.UtcNow;
-                    }
-
-                    locSynced++;
-                }
-
-                await _db.SaveChangesAsync();
-                if (!locHasMore || locContinue == null) break;
-            }
-            _logger.LogInformation("[Sync] tenantId={TenantId} locationsSynced={Count}", tenantId, locSynced);
-
-
-            // 3d. Sync Job Hold Reasons
-            int holdReasonsSynced = 0;
-            try
-            {
-                var holdRaw = await _client.GetJobHoldReasonsAsync(token, stTenantId);
-                var holdDoc = JsonDocument.Parse(holdRaw);
-                if (holdDoc.RootElement.TryGetProperty("data", out var holdArr))
-                {
-                    foreach (var hr in holdArr.EnumerateArray())
-                    {
-                        var stId = hr.GetProperty("id").GetInt64();
-                        var name = hr.TryGetProperty("name", out var nProp) ? nProp.GetString() ?? "" : "";
-                        var active = hr.TryGetProperty("active", out var aProp) && aProp.GetBoolean();
-
-                        var existing = await _db.HoldReasons
-                            .FirstOrDefaultAsync(h => h.TenantId == tenantId && h.StHoldReasonId == stId);
-
-                        if (existing == null)
-                        {
-                            _db.HoldReasons.Add(new Models.HoldReason
-                            {
-                                TenantId = tenantId,
-                                StHoldReasonId = stId,
-                                Name = name,
-                                Active = active,
-                                UpdatedAt = DateTime.UtcNow
-                            });
-                        }
-                        else
-                        {
-                            existing.Name = name;
-                            existing.Active = active;
-                            existing.UpdatedAt = DateTime.UtcNow;
-                        }
-                        holdReasonsSynced++;
-                    }
-                    await _db.SaveChangesAsync();
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "[Sync] Failed to sync hold reasons for tenant {TenantId}", tenantId);
-            }
-            _logger.LogInformation("[Sync] tenantId={TenantId} holdReasonsSynced={Count}", tenantId, holdReasonsSynced);
-
-            // Build holdReason ID -> Name map for matching during job sync
-            var holdReasonIdMap = await _db.HoldReasons
-                .Where(h => h.TenantId == tenantId && h.Active)
-                .ToDictionaryAsync(h => h.StHoldReasonId, h => h.Name);
-
             // 4. Export all Jobs
             var pmDates = new Dictionary<long, DateTime>();
             int pmFound = 0;
@@ -293,25 +101,6 @@ public class ServiceTitanSyncService
                     if (job.TryGetProperty("jobStatus", out var sProp) && sProp.ValueKind == JsonValueKind.String)
                         status = sProp.GetString() ?? "";
 
-                    long? holdReasonId = null;
-                    if (job.TryGetProperty("holdReasonId", out var hrProp) && hrProp.ValueKind == JsonValueKind.Number)
-                        holdReasonId = hrProp.GetInt64();
-
-                    // Also try alternate field names
-                    if (!holdReasonId.HasValue && job.TryGetProperty("jobHoldReasonId", out var jhrProp) && jhrProp.ValueKind == JsonValueKind.Number)
-                        holdReasonId = jhrProp.GetInt64();
-
-                    // Log all properties for hold jobs to debug
-                    if (status == "Hold")
-                    {
-                        var allProps = string.Join(", ", job.EnumerateObject().Select(p => $"{p.Name}={p.Value.ValueKind}"));
-                        _logger.LogInformation("[Sync] Hold job #{JobNum} props: {Props} holdReasonId={HoldId}", jobNumber, allProps, holdReasonId?.ToString() ?? "NULL");
-                    }
-
-                    string? holdReasonName = null;
-                    if (holdReasonId.HasValue && holdReasonIdMap.TryGetValue(holdReasonId.Value, out var hrName))
-                        holdReasonName = hrName;
-
                     string? jobTypeName = null;
                     if (job.TryGetProperty("jobTypeId", out var jtProp) && jtProp.ValueKind == JsonValueKind.Number)
                         jobTypeMap.TryGetValue(jtProp.GetInt64(), out jobTypeName);
@@ -347,7 +136,6 @@ public class ServiceTitanSyncService
                             JobNumber = jobNumber,
                             Status = status,
                             JobTypeName = jobTypeName,
-                            HoldReasonName = holdReasonName,
                             TotalAmount = totalAmount,
                             CreatedOn = createdOn,
                             UpdatedAt = DateTime.UtcNow
@@ -360,7 +148,6 @@ public class ServiceTitanSyncService
                         existingJob.JobNumber = jobNumber;
                         existingJob.Status = status;
                         existingJob.JobTypeName = jobTypeName;
-                        existingJob.HoldReasonName = holdReasonName;
                         existingJob.TotalAmount = totalAmount;
                         existingJob.UpdatedAt = DateTime.UtcNow;
                     }
@@ -390,74 +177,47 @@ public class ServiceTitanSyncService
 
             _logger.LogInformation("[Sync] tenantId={TenantId} pmFound={PmFound} uniquePmCustomers={Count}", tenantId, pmFound, pmDates.Count);
 
-
-            // The job export may not include holdReasonId, but the appointment export does
+}            // 4c. Resolve hold reasons using the jobs LIST endpoint (not export)
+            // The list endpoint (GET /jobs) returns holdReasonId, the export doesn't
             var unresolvedHoldJobs = await _db.Jobs
                 .Where(j => j.TenantId == tenantId && j.Status == "Hold" && j.HoldReasonName == null)
                 .ToListAsync();
 
             if (unresolvedHoldJobs.Count > 0 && holdReasonIdMap.Count > 0)
             {
-                _logger.LogInformation("[Sync] Resolving hold reasons for {Count} jobs via appointment export", unresolvedHoldJobs.Count);
-
-                // Build a map of jobId -> holdReasonId from appointment export
-                var jobHoldReasons = new Dictionary<long, long>();
-                string? hrApptContinue = null;
-                bool hrApptHasMore = true;
-                while (hrApptHasMore)
-                {
-                    var hrApptRaw = await _client.GetAppointmentsExportAsync(token, stTenantId, hrApptContinue);
-                    var hrApptDoc = JsonDocument.Parse(hrApptRaw);
-                    var hrApptRoot = hrApptDoc.RootElement;
-                    hrApptHasMore = hrApptRoot.TryGetProperty("hasMore", out var ahm) && ahm.GetBoolean();
-                    hrApptContinue = hrApptRoot.TryGetProperty("continueFrom", out var acf) ? acf.GetString() : null;
-
-                    if (!hrApptRoot.TryGetProperty("data", out var hrApptData)) break;
-
-                    foreach (var appt in hrApptData.EnumerateArray())
-                    {
-                        var apptStatus = appt.TryGetProperty("status", out var asProp) && asProp.ValueKind == JsonValueKind.String
-                            ? asProp.GetString() : "";
-                        if (apptStatus != "Hold") continue;
-
-                        long apptJobId = 0;
-                        if (appt.TryGetProperty("jobId", out var jidProp) && jidProp.ValueKind == JsonValueKind.Number)
-                            apptJobId = jidProp.GetInt64();
-
-                        if (apptJobId == 0) continue;
-
-                        // Try to get holdReasonId from the appointment
-                        if (appt.TryGetProperty("holdReasonId", out var hrProp2) && hrProp2.ValueKind == JsonValueKind.Number)
-                        {
-                            jobHoldReasons[apptJobId] = hrProp2.GetInt64();
-                        }
-                    }
-
-                    if (!hrApptHasMore || hrApptContinue == null) break;
-                }
-
-                _logger.LogInformation("[Sync] Found {Count} appointment hold reasons", jobHoldReasons.Count);
-
-                // Now match hold reasons to jobs
+                _logger.LogInformation("[Sync] Resolving {Count} hold reasons via jobs list endpoint", unresolvedHoldJobs.Count);
                 int resolved = 0;
-                foreach (var hj in unresolvedHoldJobs)
+
+                // Query hold jobs from the list endpoint (returns holdReasonId)
+                int listPage = 1;
+                bool listHasMore = true;
+                var holdReasonsByJobId = new Dictionary<long, long>();
+
+                while (listHasMore)
                 {
-                    if (jobHoldReasons.TryGetValue(hj.StJobId, out var apptHoldReasonId))
+                    try
                     {
-                        if (holdReasonIdMap.TryGetValue(apptHoldReasonId, out var reasonName))
+                        var listRaw = await _client.GetJobsByStatusAsync(token, stTenantId, "Hold", listPage);
+                        var listDoc = JsonDocument.Parse(listRaw);
+                        var listRoot = listDoc.RootElement;
+
+                        listHasMore = listRoot.TryGetProperty("hasMore", out var lhm) && lhm.GetBoolean();
+
+                        if (listRoot.TryGetProperty("data", out var listData))
                         {
-                            hj.HoldReasonName = reasonName;
-                            resolved++;
-                            _logger.LogInformation("[Sync] Job #{JobNum} hold reason: {Reason} (from appt)", hj.JobNumber, reasonName);
+                            foreach (var lj in listData.EnumerateArray())
+                            {
+                                var ljId = lj.GetProperty("id").GetInt64();
+                                if (lj.TryGetProperty("holdReasonId", out var ljHr) && ljHr.ValueKind == JsonValueKind.Number)
+                                {
+                                    holdReasonsByJobId[ljId] = ljHr.GetInt64();
+                                }
+                            }
                         }
-                    }
-                }
-
-                if (resolved > 0)
-                    await _db.SaveChangesAsync();
-
-                _logger.LogInformation("[Sync] Resolved {Resolved}/{Total} hold reasons from appointments", resolved, unresolvedHoldJobs.Count);
-            }
+                        else
+                        {
+                            break;
+                        }
 
 
             // 5. Upsert PmCustomers
@@ -544,7 +304,7 @@ public class ServiceTitanSyncService
                     }
 
                     DateTime invoiceDate = DateTime.MinValue;
-                    if (inv.TryGetProperty("invoiceDate", out var dateProp) && dateProp.ValueKind == JsonValueKind.String)
+                    if (inv.TryGetProperty("date", out var dateProp) && dateProp.ValueKind == JsonValueKind.String)
                         if (DateTime.TryParse(dateProp.GetString(), null,
                             System.Globalization.DateTimeStyles.AssumeUniversal |
                             System.Globalization.DateTimeStyles.AdjustToUniversal, out var parsedDate))
@@ -771,11 +531,10 @@ public class ServiceTitanSyncService
             return new SyncResult { Success = false, Error = ex.Message };
         }
     }
+}
 
 
-
-
-
+    }
 
     public async Task<string> GetRawApptExportAsync(int tenantId)
     {
@@ -835,80 +594,10 @@ public class ServiceTitanSyncService
 
 
 
+
 public class SyncResult
 {
     public bool Success { get; set; }
     public DateTime? SyncedAt { get; set; }
     public string? Error { get; set; }
-}            // 4c. Resolve hold reasons using the jobs LIST endpoint (not export)
-            // The list endpoint (GET /jobs) returns holdReasonId, the export doesn't
-            var unresolvedHoldJobs = await _db.Jobs
-                .Where(j => j.TenantId == tenantId && j.Status == "Hold" && j.HoldReasonName == null)
-                .ToListAsync();
-
-            if (unresolvedHoldJobs.Count > 0 && holdReasonIdMap.Count > 0)
-            {
-                _logger.LogInformation("[Sync] Resolving {Count} hold reasons via jobs list endpoint", unresolvedHoldJobs.Count);
-                int resolved = 0;
-
-                // Query hold jobs from the list endpoint (returns holdReasonId)
-                int listPage = 1;
-                bool listHasMore = true;
-                var holdReasonsByJobId = new Dictionary<long, long>();
-
-                while (listHasMore)
-                {
-                    try
-                    {
-                        var listRaw = await _client.GetJobsByStatusAsync(token, stTenantId, "Hold", listPage);
-                        var listDoc = JsonDocument.Parse(listRaw);
-                        var listRoot = listDoc.RootElement;
-
-                        listHasMore = listRoot.TryGetProperty("hasMore", out var lhm) && lhm.GetBoolean();
-
-                        if (listRoot.TryGetProperty("data", out var listData))
-                        {
-                            foreach (var lj in listData.EnumerateArray())
-                            {
-                                var ljId = lj.GetProperty("id").GetInt64();
-                                if (lj.TryGetProperty("holdReasonId", out var ljHr) && ljHr.ValueKind == JsonValueKind.Number)
-                                {
-                                    holdReasonsByJobId[ljId] = ljHr.GetInt64();
-                                }
-                            }
-                        }
-                        else
-                        {
-                            break;
-                        }
-
-                        listPage++;
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "[Sync] Failed to query hold jobs list page {Page}", listPage);
-                        break;
-                    }
-                }
-
-                _logger.LogInformation("[Sync] Found {Count} hold reasons from list endpoint", holdReasonsByJobId.Count);
-
-                foreach (var hj in unresolvedHoldJobs)
-                {
-                    if (holdReasonsByJobId.TryGetValue(hj.StJobId, out var hrId))
-                    {
-                        if (holdReasonIdMap.TryGetValue(hrId, out var reasonName))
-                        {
-                            hj.HoldReasonName = reasonName;
-                            resolved++;
-                            _logger.LogInformation("[Sync] Job #{JobNum}: {Reason}", hj.JobNumber, reasonName);
-                        }
-                    }
-                }
-
-                if (resolved > 0)
-                    await _db.SaveChangesAsync();
-
-                _logger.LogInformation("[Sync] Resolved {Resolved}/{Total} hold reasons", resolved, unresolvedHoldJobs.Count);
-            }
-
+}
