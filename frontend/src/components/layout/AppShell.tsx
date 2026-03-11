@@ -143,7 +143,7 @@ function GlobalSearch() {
   }
 
   return (
-    <div ref={ref} className="relative flex-1 max-w-md">
+    <div ref={ref} className="relative flex-1">
       <div className="input input-sm bg-base-200/60 border-base-content/10 w-full">
         <span className="icon-[tabler--search] text-base-content/40 size-4 shrink-0" />
         <input
@@ -155,7 +155,7 @@ function GlobalSearch() {
           onFocus={() => { if (query.trim()) setOpen(true) }}
           className="grow"
         />
-        <kbd className="kbd kbd-sm text-base-content/30">⌘K</kbd>
+        <kbd className="kbd kbd-sm text-base-content/30">âK</kbd>
       </div>
 
       {open && (query.trim() || loading) && (
@@ -213,7 +213,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         />
       )}
 
-      {/* ── Sidebar ── */}
+      {/* ââ Sidebar ââ */}
       <aside
         className={`fixed inset-y-0 start-0 z-30 flex h-full w-72 flex-col border-e border-base-content/10 bg-base-100 transition-transform duration-200 lg:relative lg:translate-x-0 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
@@ -285,16 +285,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <div className="flex flex-1 flex-col min-w-0">
         <header className="navbar sticky top-0 z-20 border-b border-base-content/10 bg-base-100 px-4 lg:px-6">
-          <div className="navbar-start gap-2">
+          <div className="navbar-start gap-2 lg:w-auto lg:flex-none">
             <button className="btn btn-ghost btn-square btn-sm lg:hidden" onClick={() => setSidebarOpen(true)} aria-label="Open menu">
               <span className="icon-[tabler--menu-2] size-5" />
             </button>
             <span className="text-base-content font-semibold lg:hidden">MyServiceAO</span>
           </div>
-          <div className="navbar-center hidden lg:flex">
+          <div className="navbar-center hidden lg:flex flex-1 px-4">
             <GlobalSearch />
           </div>
-          <div className="navbar-end gap-2">
+          <div className="navbar-end gap-2 lg:w-auto lg:flex-none">
             <div className="dropdown dropdown-end">
               <button tabIndex={0} className="btn btn-ghost btn-square btn-sm" aria-label="Switch theme">
                 <span className={`size-5 ${THEMES.find(t => t.value === theme)?.icon ?? 'icon-[tabler--moon]'}`} />
