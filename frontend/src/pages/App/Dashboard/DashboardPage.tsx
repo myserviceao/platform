@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 
-// ââ Types ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// Ã¢ÂÂÃ¢ÂÂ Types Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
 interface ArBucket {
   bucket0_30: number
   bucket31_60: number
@@ -24,6 +24,19 @@ interface OverduePm {
   customerName: string
   lastPmDate: string | null
   daysSince: number
+}
+interface ApVendorSummary {
+  vendorName: string
+  totalOwed: number
+  invoiceCount: number
+  nextDue: string
+}
+interface ApSummary {
+  totalAp: number
+  nextDueDate: string | null
+  nextDueDays: number
+  vendorCount: number
+  byVendor: ApVendorSummary[]
 }
 interface ScheduleItem {
   jobNumber: string
@@ -65,7 +78,7 @@ interface DashboardData {
   dayAfterLabel: string
 }
 
-// ââ Formatters âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// Ã¢ÂÂÃ¢ÂÂ Formatters Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
 }
@@ -95,7 +108,7 @@ function daysSinceStr(createdOn: string | null) {
   return Math.floor((Date.now() - new Date(createdOn).getTime()) / 86400000)
 }
 
-// ââ Stat Tile (Patriot-style with colored top border) ââââââââââââââââââââââ
+// Ã¢ÂÂÃ¢ÂÂ Stat Tile (Patriot-style with colored top border) Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
 function StatTile({ borderColor, label, value, sub, subColor }: {
   borderColor: string
   label: string
@@ -112,17 +125,22 @@ function StatTile({ borderColor, label, value, sub, subColor }: {
   )
 }
 
-// ââ Main âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// Ã¢ÂÂÃ¢ÂÂ Main Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
 export function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState('')
   const [schedTab, setSchedTab] = useState<'today' | 'tomorrow' | 'dayafter'>('today')
+  const [apData, setApData] = useState<ApSummary | null>(null)
 
   const fetchDashboard = useCallback(async () => {
-    const res = await fetch('/api/dashboard', { credentials: 'include' })
-    if (res.ok) setData(await res.json())
+    const [dRes, apRes] = await Promise.all([
+      fetch('/api/dashboard', { credentials: 'include' }),
+      fetch('/api/ap/summary', { credentials: 'include' }),
+    ])
+    if (dRes.ok) setData(await dRes.json())
+    if (apRes.ok) setApData(await apRes.json())
   }, [])
 
   useEffect(() => {
@@ -138,7 +156,7 @@ export function DashboardPage() {
       if (!res.ok) { setError(json.error || 'Sync failed'); return }
       setData(json)
     } catch {
-      setError('Network error â please try again')
+      setError('Network error Ã¢ÂÂ please try again')
     } finally {
       setSyncing(false)
     }
@@ -201,7 +219,7 @@ export function DashboardPage() {
         </div>
       )}
 
-      {/* ââ Row 1: Financial KPIs (5 cards) ââ */}
+      {/* Ã¢ÂÂÃ¢ÂÂ Row 1: Financial KPIs (5 cards) Ã¢ÂÂÃ¢ÂÂ */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <StatTile
           borderColor="border-t-blue-500"
@@ -219,25 +237,25 @@ export function DashboardPage() {
           borderColor="border-t-emerald-400"
           label="Net Position"
           value={fmt(arTotal)}
-          sub={arTotal > 0 ? `AR covers AP â` : 'â'}
+          sub={arTotal > 0 ? `AR covers AP Ã¢ÂÂ` : 'Ã¢ÂÂ'}
           subColor="text-success"
         />
         <StatTile
           borderColor="border-t-green-500"
           label="Month Revenue"
           value={fmt(d?.revenueThisMonth ?? 0)}
-          sub={change ? `${change.up ? 'â' : 'â'} ${change.pct}% vs ${prevMonthName}` : `Last: ${fmtShort(d?.revenueLastMonth ?? 0)}`}
+          sub={change ? `${change.up ? 'Ã¢ÂÂ' : 'Ã¢ÂÂ'} ${change.pct}% vs ${prevMonthName}` : `Last: ${fmtShort(d?.revenueLastMonth ?? 0)}`}
           subColor={change ? (change.up ? 'text-success' : 'text-error') : undefined}
         />
         <StatTile
           borderColor="border-t-indigo-500"
           label="Forecasted Revenue"
           value={fmt(forecastedRevenue)}
-          sub={`${daysLeft}d left Â· ${d?.openWoCount ?? 0} open jobs`}
+          sub={`${daysLeft}d left ÃÂ· ${d?.openWoCount ?? 0} open jobs`}
         />
       </div>
 
-      {/* ââ Row 2: Ops KPIs (3 cards) ââ */}
+      {/* Ã¢ÂÂÃ¢ÂÂ Row 2: Ops KPIs (3 cards) Ã¢ÂÂÃ¢ÂÂ */}
       <div className="grid grid-cols-3 gap-3">
         <StatTile
           borderColor="border-t-red-500"
@@ -309,7 +327,7 @@ export function DashboardPage() {
                           ? item.techs.join(', ')
                           : <span className="text-base-content/30 italic">Unassigned</span>}
                       </td>
-                      <td className="text-sm font-mono text-primary">{item.jobNumber || 'â'}</td>
+                      <td className="text-sm font-mono text-primary">{item.jobNumber || 'Ã¢ÂÂ'}</td>
                       <td className="text-sm font-medium">{item.customerName}</td>
                       <td className="text-sm text-base-content/60">{fmtTime(item.start)}</td>
                     </tr>
@@ -324,7 +342,7 @@ export function DashboardPage() {
       </div>
 
       {/* Bottom 3-column layout */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
 
         {/* Col 1: Open Work Orders */}
         <div className="card bg-base-100 shadow-sm">
@@ -351,7 +369,7 @@ export function DashboardPage() {
                       return (
                         <tr key={i} className="hover:bg-base-200/40">
                           <td className="text-sm font-medium max-w-[8rem] truncate">{job.customerName}</td>
-                          <td className="text-sm font-mono text-primary text-right">{job.jobNumber || 'â'}</td>
+                          <td className="text-sm font-mono text-primary text-right">{job.jobNumber || 'Ã¢ÂÂ'}</td>
                           <td className={`text-sm text-right font-medium ${age >= 90 ? 'text-error' : age >= 30 ? 'text-warning' : 'text-base-content/60'}`}>
                             {age}d
                           </td>
@@ -378,9 +396,9 @@ export function DashboardPage() {
             {aging && (
               <div className="px-4 py-3 space-y-2 border-b border-base-200">
                 {[
-                  { label: '0â30d',  val: aging.bucket0_30,   color: 'bg-success' },
-                  { label: '31â60d', val: aging.bucket31_60,  color: 'bg-warning' },
-                  { label: '61â90d', val: aging.bucket61_90,  color: 'bg-orange-400' },
+                  { label: '0Ã¢ÂÂ30d',  val: aging.bucket0_30,   color: 'bg-success' },
+                  { label: '31Ã¢ÂÂ60d', val: aging.bucket31_60,  color: 'bg-warning' },
+                  { label: '61Ã¢ÂÂ90d', val: aging.bucket61_90,  color: 'bg-orange-400' },
                   { label: '90d+',   val: aging.bucket90Plus, color: 'bg-error' },
                 ].map(({ label, val, color }) => (
                   <div key={label} className="flex items-center gap-2">
@@ -427,7 +445,41 @@ export function DashboardPage() {
           </div>
         </div>
 
-        {/* Col 3: Overdue PMs */}
+        {/* Col 3: Accounts Payable */}
+        <div className="card bg-base-100 shadow-sm">
+          <div className="card-body p-0">
+            <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-base-200">
+              <h3 className="font-semibold text-sm text-base-content">Accounts Payable</h3>
+              <a href="/app/ap" className="text-xs text-primary hover:underline">View All \u2192</a>
+            </div>
+            <div className="overflow-auto max-h-64">
+              {apData?.byVendor && apData.byVendor.length > 0 ? (
+                <table className="table table-sm">
+                  <thead>
+                    <tr className="text-xs text-base-content/40 uppercase">
+                      <th>Vendor</th>
+                      <th className="text-right">Total Owed</th>
+                      <th className="text-right">Next Due</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {apData.byVendor.map((v, i) => (
+                      <tr key={i} className="hover:bg-base-200/40">
+                        <td className="text-sm font-medium text-base-content">{v.vendorName}</td>
+                        <td className="text-sm font-semibold text-right">{fmtShort(v.totalOwed)}</td>
+                        <td className="text-sm text-base-content/60 text-right">{new Date(v.nextDue).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="text-sm text-base-content/40 px-4 py-4">No outstanding AP</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Col 4: Overdue PMs */}
         <div className="card bg-base-100 shadow-sm">
           <div className="card-body p-0">
             <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-base-200">
