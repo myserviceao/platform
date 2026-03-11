@@ -40,15 +40,18 @@ interface DashboardData {
   synced: boolean
   snapshotTakenAt: string | null
   totalAR: number
+  arOldestDays: number
   oldestWoDays: number
   aRaging: ArBucket
   aRbyCustomer: ArCustomer[]
   revenueThisMonth: number
   revenueLastMonth: number
+  forecastedRevenue: number
   daysInMonth: number
   daysElapsed: number
   openWorkOrders: OpenJob[]
   openWoCount: number
+  needToSchedule: number
   overduePms: OverduePm[]
   overduePmCount: number
   scheduledToday: DaySchedule
@@ -61,17 +64,17 @@ interface DashboardData {
 
 // ── Formatters ─────────────────────────────────────────────────────────────
 function fmt(n: number) {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
+}
+function fmtShort(n: number) {
   if (n >= 1000000) return `$${(n / 1000000).toFixed(1)}M`
   if (n >= 1000) return `$${(n / 1000).toFixed(1)}k`
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
 }
-function fmtFull(n: number) {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(n)
-}
 function revPct(curr: number, prev: number) {
   if (prev === 0) return null
   const p = ((curr - prev) / prev) * 100
-  return { pct: Math.abs(p).toFixed(1), up: p >= 0 }
+  return { pct: Math.abs(p).toFixed(0), up: p >= 0 }
 }
 function agePct(bucket: number, total: number) {
   return total === 0 ? 0 : Math.round((bucket / total) * 100)
@@ -84,9 +87,26 @@ function fmtTime(utcIso: string) {
     })
   } catch { return '' }
 }
-function daysSince(createdOn: string | null) {
+function daysSinceStr(createdOn: string | null) {
   if (!createdOn) return 0
   return Math.floor((Date.now() - new Date(createdOn).getTime()) / 86400000)
+}
+
+// ── Stat Tile (Patriot-style with colored top border) ──────────────────────
+function StatTile({ borderColor, label, value, sub, subColor }: {
+  borderColor: string
+  label: string
+  value: string
+  sub: string
+  subColor?: string
+}) {
+  return (
+    <div className={`rounded-box border border-base-content/10 bg-base-100 border-t-[3px] ${borderColor} p-4`}>
+      <p className="text-[10px] font-semibold text-base-content/50 uppercase tracking-widest mb-1">{label}</p>
+      <p className="text-2xl font-bold text-base-content leading-tight">{value}</p>
+      <p className={`text-xs mt-1 ${subColor ?? 'text-base-content/40'}`}>{sub}</p>
+    </div>
+  )
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────
@@ -130,51 +150,17 @@ export function DashboardPage() {
   }
 
   const d = data
-  const change = d ? revPct(d.revenueThisMonth, d.revenueLastMonth) : null
   const arTotal = d?.totalAR ?? 0
   const aging = d?.aRaging
+  const change = d ? revPct(d.revenueThisMonth, d.revenueLastMonth) : null
+  const prevMonthName = new Date(Date.now() - 30 * 86400000).toLocaleString('en-US', { month: 'short' })
+  const daysLeft = (d?.daysInMonth ?? 30) - (d?.daysElapsed ?? 0)
+  const forecastedRevenue = d?.forecastedRevenue ?? 0
 
   const activeSchedule: DaySchedule | null =
     schedTab === 'today'    ? (d?.scheduledToday    ?? null) :
     schedTab === 'tomorrow' ? (d?.scheduledTomorrow ?? null) :
                               (d?.scheduledDayAfter ?? null)
-
-  // Stat items for the unified card
-  const stats = [
-    {
-      icon: 'icon-[tabler--currency-dollar]',
-      iconBg: arTotal > 0 ? 'bg-warning/10' : 'bg-success/10',
-      iconColor: arTotal > 0 ? 'text-warning' : 'text-success',
-      label: 'Total AR',
-      value: fmt(arTotal),
-      sub: arTotal > 0 ? `${d?.aRbyCustomer?.length ?? 0} customers` : 'All paid up',
-    },
-    {
-      icon: 'icon-[tabler--chart-line]',
-      iconBg: 'bg-success/10',
-      iconColor: 'text-success',
-      label: 'Month Revenue',
-      value: fmt(d?.revenueThisMonth ?? 0),
-      sub: change ? `${change.up ? '↑' : '↓'} ${change.pct}% vs last month` : `Last: ${fmt(d?.revenueLastMonth ?? 0)}`,
-      subColor: change ? (change.up ? 'text-success' : 'text-error') : undefined,
-    },
-    {
-      icon: 'icon-[tabler--clipboard-list]',
-      iconBg: 'bg-primary/10',
-      iconColor: 'text-primary',
-      label: 'Open Work Orders',
-      value: (d?.openWoCount ?? 0).toString(),
-      sub: d?.oldestWoDays ? `oldest ${d.oldestWoDays}d` : 'None open',
-    },
-    {
-      icon: 'icon-[tabler--alert-triangle]',
-      iconBg: (d?.overduePmCount ?? 0) > 0 ? 'bg-error/10' : 'bg-success/10',
-      iconColor: (d?.overduePmCount ?? 0) > 0 ? 'text-error' : 'text-success',
-      label: 'Overdue PMs',
-      value: (d?.overduePmCount ?? 0).toString(),
-      sub: (d?.overduePmCount ?? 0) > 0 ? `${d!.overduePmCount} past due` : 'All current',
-    },
-  ]
 
   return (
     <div className="space-y-5">
@@ -194,7 +180,6 @@ export function DashboardPage() {
         </button>
       </div>
 
-      {/* Error */}
       {error && (
         <div className="alert alert-soft alert-error text-sm">
           <span className="icon-[tabler--alert-circle] size-4 shrink-0" />
@@ -202,7 +187,6 @@ export function DashboardPage() {
         </div>
       )}
 
-      {/* Not synced yet */}
       {!d?.synced && (
         <div className="alert bg-primary/10 border border-primary/20">
           <span className="icon-[tabler--plug] size-5 text-primary shrink-0" />
@@ -214,24 +198,63 @@ export function DashboardPage() {
         </div>
       )}
 
-      {/* ── Combined Stat Card ── */}
-      <div className="card bg-base-100 shadow-sm">
-        <div className="card-body p-0">
-          <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-base-content/10">
-            {stats.map((s, i) => (
-              <div key={i} className="flex items-center gap-3 px-5 py-4">
-                <div className={`flex items-center justify-center size-10 rounded-lg ${s.iconBg} shrink-0`}>
-                  <span className={`${s.icon} size-5 ${s.iconColor}`} />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-medium text-base-content/50 truncate">{s.label}</p>
-                  <p className="text-xl font-bold text-base-content leading-tight">{s.value}</p>
-                  <p className={`text-xs ${s.subColor ?? 'text-base-content/40'} truncate`}>{s.sub}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+      {/* ── Row 1: Financial KPIs (5 cards) ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <StatTile
+          borderColor="border-t-blue-500"
+          label="Total AR"
+          value={fmt(arTotal)}
+          sub={arTotal > 0 ? `oldest ${d?.arOldestDays ?? 0}+ days` : 'all paid up'}
+        />
+        <StatTile
+          borderColor="border-t-cyan-400"
+          label="Total AP"
+          value="$0"
+          sub="coming soon"
+          subColor="text-base-content/30"
+        />
+        <StatTile
+          borderColor="border-t-emerald-400"
+          label="Net Position"
+          value={fmt(arTotal)}
+          sub={arTotal > 0 ? `AR covers AP —` : '—'}
+          subColor="text-success"
+        />
+        <StatTile
+          borderColor="border-t-green-500"
+          label="Month Revenue"
+          value={fmt(d?.revenueThisMonth ?? 0)}
+          sub={change ? `${change.up ? '↑' : '↓'} ${change.pct}% vs ${prevMonthName}` : `Last: ${fmtShort(d?.revenueLastMonth ?? 0)}`}
+          subColor={change ? (change.up ? 'text-success' : 'text-error') : undefined}
+        />
+        <StatTile
+          borderColor="border-t-indigo-500"
+          label="Forecasted Revenue"
+          value={fmt(forecastedRevenue)}
+          sub={`${daysLeft}d left · ${d?.openWoCount ?? 0} open jobs`}
+        />
+      </div>
+
+      {/* ── Row 2: Ops KPIs (3 cards) ── */}
+      <div className="grid grid-cols-3 gap-3">
+        <StatTile
+          borderColor="border-t-red-500"
+          label="Open WOs"
+          value={(d?.openWoCount ?? 0).toString()}
+          sub={d?.oldestWoDays ? `oldest ${d.oldestWoDays}d open` : 'none open'}
+        />
+        <StatTile
+          borderColor="border-t-amber-400"
+          label="Need to Schedule"
+          value={(d?.needToSchedule ?? 0).toString()}
+          sub="unbooked jobs"
+        />
+        <StatTile
+          borderColor="border-t-fuchsia-500"
+          label="Overdue PMs"
+          value={(d?.overduePmCount ?? 0).toString()}
+          sub={d?.overduePms?.length ? `longest ${d.overduePms[0]?.daysSince ?? 0}d ago` : 'all current'}
+        />
       </div>
 
       {/* Schedule Strip */}
@@ -322,7 +345,7 @@ export function DashboardPage() {
                   </thead>
                   <tbody>
                     {d.openWorkOrders.map((job, i) => {
-                      const age = daysSince(job.createdOn)
+                      const age = daysSinceStr(job.createdOn)
                       return (
                         <tr key={i} className="hover:bg-base-200/40">
                           <td className="text-sm font-medium max-w-[8rem] truncate">{job.customerName}</td>
@@ -347,7 +370,7 @@ export function DashboardPage() {
           <div className="card-body p-0">
             <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-base-200">
               <h3 className="font-semibold text-sm text-base-content">AR Aging</h3>
-              <span className="text-sm text-base-content/50">{fmtFull(arTotal)} outstanding</span>
+              <span className="text-sm text-base-content/50">{fmt(arTotal)} outstanding</span>
             </div>
 
             {aging && (
@@ -356,7 +379,7 @@ export function DashboardPage() {
                   { label: '0–30d',  val: aging.bucket0_30,   color: 'bg-success' },
                   { label: '31–60d', val: aging.bucket31_60,  color: 'bg-warning' },
                   { label: '61–90d', val: aging.bucket61_90,  color: 'bg-orange-400' },
-                  { label: '90d+',        val: aging.bucket90Plus, color: 'bg-error' },
+                  { label: '90d+',   val: aging.bucket90Plus, color: 'bg-error' },
                 ].map(({ label, val, color }) => (
                   <div key={label} className="flex items-center gap-2">
                     <span className="text-xs text-base-content/50 w-12 shrink-0">{label}</span>
@@ -366,7 +389,7 @@ export function DashboardPage() {
                         style={{ width: `${agePct(val, arTotal)}%` }}
                       />
                     </div>
-                    <span className="text-xs font-medium text-base-content/70 w-16 text-right shrink-0">{fmt(val)}</span>
+                    <span className="text-xs font-medium text-base-content/70 w-16 text-right shrink-0">{fmtShort(val)}</span>
                   </div>
                 ))}
               </div>
@@ -390,7 +413,7 @@ export function DashboardPage() {
                           </span>
                           <span className="text-xs text-base-content/40 ml-1">{ar.oldestInvoiceDays}d</span>
                         </td>
-                        <td className="text-sm font-semibold text-right">{fmtFull(ar.totalOwed)}</td>
+                        <td className="text-sm font-semibold text-right">{fmt(ar.totalOwed)}</td>
                       </tr>
                     ))}
                   </tbody>
