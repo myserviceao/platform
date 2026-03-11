@@ -126,5 +126,14 @@ public static class DbMigrations
             ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""Title"" TEXT;
         ");
 
+
+        // Add Phone/Email to Customers for PM outreach
+        await db.Database.ExecuteSqlRawAsync(@"
+            ALTER TABLE ""Customers"" ADD COLUMN IF NOT EXISTS ""Phone"" TEXT;
+        ");
+        await db.Database.ExecuteSqlRawAsync(@"
+            ALTER TABLE ""Customers"" ADD COLUMN IF NOT EXISTS ""Email"" TEXT;
+        ");
+
     }
 }
