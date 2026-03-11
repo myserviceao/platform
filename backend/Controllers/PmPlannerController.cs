@@ -28,6 +28,8 @@ public class PmPlannerController : ControllerBase
         public string PmStatus { get; set; } = "";
         public DateTime? LastPmDate { get; set; }
         public int DaysSince { get; set; }
+        public string? Phone { get; set; }
+        public string? Email { get; set; }
     }
 
     [HttpGet]
@@ -66,6 +68,11 @@ public class PmPlannerController : ControllerBase
             .Where(l => l.TenantId == tenantId.Value && l.IsGeocoded && targetCustomerIds.Contains(l.StCustomerId))
             .ToListAsync();
 
+        // Get customer contact info
+        var customerContacts = await _db.Customers
+            .Where(c => c.TenantId == tenantId.Value && targetCustomerIds.Contains(c.StCustomerId))
+            .ToDictionaryAsync(c => c.StCustomerId);
+
         var points = locations
             .Where(l => l.Latitude.HasValue && l.Longitude.HasValue)
             .Select(l =>
@@ -84,13 +91,16 @@ public class PmPlannerController : ControllerBase
                     LastPmDate = pm?.LastPmDate,
                     DaysSince = pm?.LastPmDate.HasValue == true
                         ? (int)(DateTime.UtcNow - pm.LastPmDate.Value).TotalDays
-                        : 0
+                        : 0,
+                    Phone = customerContacts.TryGetValue(l.StCustomerId, out var cust) ? cust.Phone : null,
+                    Email = cust?.Email
                 };
             })
             .ToList();
 
         double radiusMiles = radiusMinutes switch
         {
+            <= 5 => 4,
             <= 10 => 8,
             <= 30 => 25,
             _ => 50
@@ -273,7 +283,9 @@ public class PmPlannerController : ControllerBase
                     lng = c.Lng,
                     pmStatus = c.PmStatus,
                     lastPmDate = c.LastPmDate,
-                    daysSince = c.DaysSince
+                    daysSince = c.DaysSince,
+                    phone = c.Phone,
+                    email = c.Email
                 }),
                 centerLat = cluster.Average(c => c.Lat),
                 centerLng = cluster.Average(c => c.Lng)
