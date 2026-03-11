@@ -242,6 +242,7 @@ public class DashboardController : ControllerBase
         });
     
     [HttpGet("job-history/{stJobId}")]
+    }
     public async Task<IActionResult> GetJobHistory(long stJobId)
     {
         var tenantId = HttpContext.Session.GetInt32("tenantId");
@@ -249,6 +250,4 @@ public class DashboardController : ControllerBase
         var raw = await _sync.GetJobHistoryRawAsync(tenantId.Value, stJobId);
         return Content(raw, "application/json");
     }
-
-}
 }
