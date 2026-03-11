@@ -16,6 +16,8 @@ public class AppDbContext : DbContext
     public DbSet<Job> Jobs => Set<Job>();
     public DbSet<Appointment> Appointments => Set<Appointment>();
     public DbSet<AppointmentTechnician> AppointmentTechnicians => Set<AppointmentTechnician>();
+    public DbSet<Vendor> Vendors => Set<Vendor>();
+    public DbSet<ApBill> ApBills => Set<ApBill>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -49,7 +51,7 @@ public class AppDbContext : DbContext
              .HasForeignKey(d => d.TenantId);
         });
 
-        // Customer - one row per (tenant, ST customer)
+        // Customer
         modelBuilder.Entity<Customer>(e =>
         {
             e.HasKey(c => c.Id);
@@ -59,7 +61,7 @@ public class AppDbContext : DbContext
              .HasForeignKey(c => c.TenantId);
         });
 
-        // PmCustomer - one row per (tenant, ST customer)
+        // PmCustomer
         modelBuilder.Entity<PmCustomer>(e =>
         {
             e.HasKey(p => p.Id);
@@ -69,7 +71,7 @@ public class AppDbContext : DbContext
              .HasForeignKey(p => p.TenantId);
         });
 
-        // Invoice - one row per (tenant, ST invoice)
+        // Invoice (AR - from ServiceTitan)
         modelBuilder.Entity<Invoice>(e =>
         {
             e.HasKey(i => i.Id);
@@ -81,7 +83,7 @@ public class AppDbContext : DbContext
             e.Property(i => i.BalanceRemaining).HasColumnType("numeric(18,2)");
         });
 
-        // Job - one row per (tenant, ST job)
+        // Job
         modelBuilder.Entity<Job>(e =>
         {
             e.HasKey(j => j.Id);
@@ -92,7 +94,7 @@ public class AppDbContext : DbContext
             e.Property(j => j.TotalAmount).HasColumnType("numeric(18,2)");
         });
 
-        // Appointment - one row per (tenant, ST appointment)
+        // Appointment
         modelBuilder.Entity<Appointment>(e =>
         {
             e.HasKey(a => a.Id);
@@ -106,10 +108,32 @@ public class AppDbContext : DbContext
              .OnDelete(DeleteBehavior.Cascade);
         });
 
-        // AppointmentTechnician
         modelBuilder.Entity<AppointmentTechnician>(e =>
         {
             e.HasKey(t => t.Id);
+        });
+
+        // Vendor
+        modelBuilder.Entity<Vendor>(e =>
+        {
+            e.HasKey(v => v.Id);
+            e.HasOne(v => v.Tenant)
+             .WithMany()
+             .HasForeignKey(v => v.TenantId);
+            e.Property(v => v.Name).IsRequired().HasMaxLength(200);
+        });
+
+        // ApBill (AP invoices)
+        modelBuilder.Entity<ApBill>(e =>
+        {
+            e.HasKey(b => b.Id);
+            e.HasOne(b => b.Tenant)
+             .WithMany()
+             .HasForeignKey(b => b.TenantId);
+            e.HasOne(b => b.Vendor)
+             .WithMany()
+             .HasForeignKey(b => b.VendorId);
+            e.Property(b => b.Amount).HasColumnType("numeric(18,2)");
         });
     }
 }
