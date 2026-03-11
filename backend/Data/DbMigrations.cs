@@ -120,5 +120,11 @@ public static class DbMigrations
                 ""UpdatedAt"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
             );
         ");
+
+        // Add Title column to Users
+        await db.Database.ExecuteSqlRawAsync(@"
+            ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""Title"" TEXT;
+        ");
+
     }
 }
