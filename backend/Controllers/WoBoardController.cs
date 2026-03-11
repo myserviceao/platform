@@ -12,10 +12,20 @@ public class WoBoardController : ControllerBase
 
     public WoBoardController(AppDbContext db) { _db = db; }
 
-    /// <summary>
-    /// GET /api/wo-board
-    /// Returns all open work orders grouped by status for the Kanban board.
-    /// </summary>
+    private class BoardJob
+    {
+        public int Id { get; set; }
+        public long StJobId { get; set; }
+        public string JobNumber { get; set; } = "";
+        public string CustomerName { get; set; } = "";
+        public string Status { get; set; } = "";
+        public string? JobTypeName { get; set; }
+        public string? HoldReasonName { get; set; }
+        public decimal TotalAmount { get; set; }
+        public DateTime? CreatedOn { get; set; }
+        public int DaysSince { get; set; }
+    }
+
     [HttpGet]
     public async Task<IActionResult> GetBoard()
     {
@@ -27,53 +37,78 @@ public class WoBoardController : ControllerBase
         var jobs = await _db.Jobs
             .Where(j => j.TenantId == tenantId.Value && openStatuses.Contains(j.Status))
             .OrderByDescending(j => j.CreatedOn)
-            .Select(j => new
+            .Select(j => new BoardJob
             {
-                j.Id,
-                j.StJobId,
-                j.JobNumber,
-                j.CustomerName,
-                j.Status,
-                j.JobTypeName,
-                j.TotalAmount,
-                j.CreatedOn,
-                daysSince = j.CreatedOn.HasValue
+                Id = j.Id,
+                StJobId = j.StJobId,
+                JobNumber = j.JobNumber,
+                CustomerName = j.CustomerName,
+                Status = j.Status,
+                JobTypeName = j.JobTypeName,
+                HoldReasonName = j.HoldReasonName,
+                TotalAmount = j.TotalAmount,
+                CreatedOn = j.CreatedOn,
+                DaysSince = j.CreatedOn.HasValue
                     ? (int)(System.DateTime.UtcNow - j.CreatedOn.Value).TotalDays
                     : 0
             })
             .ToListAsync();
 
-        // Group by status into columns
-        var columns = openStatuses.Select(status => new
-        {
-            status,
-            label = status switch
-            {
-                "Scheduled" => "Scheduled",
-                "Dispatched" => "Dispatched",
-                "InProgress" => "In Progress",
-                "Hold" => "On Hold",
-                _ => status
-            },
-            color = status switch
-            {
-                "Scheduled" => "info",
-                "Dispatched" => "primary",
-                "InProgress" => "warning",
-                "Hold" => "error",
-                _ => "ghost"
-            },
-            count = jobs.Count(j => j.Status == status),
-            jobs = jobs.Where(j => j.Status == status).ToList()
-        }).ToList();
+        var holdReasons = await _db.HoldReasons
+            .Where(h => h.TenantId == tenantId.Value && h.Active)
+            .OrderBy(h => h.Name)
+            .Select(h => h.Name)
+            .ToListAsync();
 
-        var totalAmount = jobs.Sum(j => j.TotalAmount);
+        var resultColumns = new List<object>();
+
+        // Status columns
+        var statusDefs = new[] {
+            ("Scheduled", "Scheduled", "info"),
+            ("Dispatched", "Dispatched", "primary"),
+            ("InProgress", "In Progress", "warning"),
+        };
+
+        foreach (var (status, label, color) in statusDefs)
+        {
+            var colJobs = jobs.Where(j => j.Status == status).ToList();
+            resultColumns.Add(new { key = status, label, color, isHold = false, count = colJobs.Count, jobs = colJobs });
+        }
+
+        // Hold columns
+        var holdJobs = jobs.Where(j => j.Status == "Hold").ToList();
+        var assignedJobIds = new HashSet<int>();
+
+        if (holdReasons.Count > 0)
+        {
+            foreach (var reason in holdReasons)
+            {
+                var reasonJobs = holdJobs
+                    .Where(j => string.Equals(j.HoldReasonName, reason, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+
+                foreach (var rj in reasonJobs) assignedJobIds.Add(rj.Id);
+
+                resultColumns.Add(new { key = $"hold-{reason}", label = reason, color = "error", isHold = true, count = reasonJobs.Count, jobs = reasonJobs });
+            }
+
+            var unmatched = holdJobs.Where(j => !assignedJobIds.Contains(j.Id)).ToList();
+            if (unmatched.Count > 0)
+            {
+                resultColumns.Add(new { key = "hold-other", label = "On Hold (Other)", color = "error", isHold = true, count = unmatched.Count, jobs = unmatched });
+            }
+        }
+        else
+        {
+            resultColumns.Add(new { key = "hold", label = "On Hold", color = "error", isHold = true, count = holdJobs.Count, jobs = holdJobs });
+        }
 
         return Ok(new
         {
             totalJobs = jobs.Count,
-            totalAmount,
-            columns
+            totalAmount = jobs.Sum(j => j.TotalAmount),
+            holdReasonCount = holdReasons.Count,
+            columns = resultColumns
         });
     }
 }
