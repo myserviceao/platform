@@ -1,26 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useTheme, type Theme } from '@/hooks/useTheme'
 import { useAuth } from '@/hooks/useAuth'
 
-const THEMES: { value: Theme; label: string; description: string; mode: 'dark' | 'light' }[] = [
-  { value: 'dark', label: 'Dark', description: 'Default dark theme', mode: 'dark' },
-  { value: 'black', label: 'Black', description: 'Pure black OLED-friendly', mode: 'dark' },
-  { value: 'shadcn', label: 'Shadcn', description: 'Inspired by shadcn/ui', mode: 'dark' },
-  { value: 'vscode', label: 'VS Code', description: 'Editor-inspired dark', mode: 'dark' },
-  { value: 'spotify', label: 'Spotify', description: 'Music-inspired green on dark', mode: 'dark' },
-  { value: 'slack', label: 'Slack', description: 'Workspace-inspired dark', mode: 'dark' },
-  { value: 'valorant', label: 'Valorant', description: 'Gaming-inspired red on dark', mode: 'dark' },
-  { value: 'claude', label: 'Claude', description: 'Warm, Anthropic-inspired', mode: 'dark' },
-  { value: 'luxury', label: 'Luxury', description: 'Elegant with gold accents', mode: 'dark' },
-  { value: 'light', label: 'Light', description: 'Clean bright theme', mode: 'light' },
-  { value: 'corporate', label: 'Corporate', description: 'Professional blue tones', mode: 'light' },
-  { value: 'soft', label: 'Soft', description: 'Gentle pastel colors', mode: 'light' },
-  { value: 'pastel', label: 'Pastel', description: 'Soft candy colors', mode: 'light' },
-  { value: 'gourmet', label: 'Gourmet', description: 'Warm cream and earthy', mode: 'light' },
-  { value: 'ghibli', label: 'Ghibli', description: 'Anime-inspired soft tones', mode: 'light' },
-  { value: 'mintlify', label: 'Mintlify', description: 'Modern docs-inspired', mode: 'light' },
-  { value: 'perplexity', label: 'Perplexity', description: 'AI-search inspired', mode: 'light' },
-]
+
 
 interface Vendor { id: number; name: string; contactName?: string; phone?: string; email?: string }
 
@@ -132,7 +113,6 @@ function ProfileSettings() {
 }
 
 export function SettingsPage() {
-  const { theme, setTheme } = useTheme()
   const [vendors, setVendors] = useState<Vendor[]>([])
   const [vendorForm, setVendorForm] = useState({ name: '', contactName: '', phone: '', email: '' })
   const [showVendorForm, setShowVendorForm] = useState(false)
@@ -183,6 +163,59 @@ export function SettingsPage() {
       <div className="card bg-base-100 shadow-sm">
         <div className="card-body gap-5">
           <div>
+            <h2 className="text-base-content font-semibold text-base">Vendor Management</h2>
+            <p className="text-base-content/60 text-sm mt-0.5">Manage AP vendors for tracking bills.</p>
+          </div>
+          {showVendorForm && (
+            <div className="rounded-box border border-primary/20 bg-base-200/30 p-4 space-y-3">
+              {vendorError && <div className="alert alert-soft alert-error text-sm py-2">{vendorError}</div>}
+              <div className="grid grid-cols-2 gap-3">
+                <input className="input input-sm" placeholder="Company Name *" value={vendorForm.name} onChange={e => setVendorForm(f => ({ ...f, name: e.target.value }))} />
+                <input className="input input-sm" placeholder="Contact Name" value={vendorForm.contactName} onChange={e => setVendorForm(f => ({ ...f, contactName: e.target.value }))} />
+                <input className="input input-sm" placeholder="Phone" value={vendorForm.phone} onChange={e => setVendorForm(f => ({ ...f, phone: e.target.value }))} />
+                <input className="input input-sm" placeholder="Email" value={vendorForm.email} onChange={e => setVendorForm(f => ({ ...f, email: e.target.value }))} />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button className="btn btn-ghost btn-sm" onClick={() => { setShowVendorForm(false); setVendorError('') }}>Cancel</button>
+                <button className="btn btn-primary btn-sm" onClick={addVendor} disabled={vendorSaving}>{vendorSaving ? 'Adding...' : 'Save Vendor'}</button>
+              </div>
+            </div>
+          )}
+
+          {vendors.length === 0 ? (
+            <p className="text-sm text-base-content/40">No vendors yet. Add one to start tracking AP.</p>
+          ) : (
+            <div className="rounded-box border border-base-content/10 overflow-hidden">
+              <table className="table table-sm">
+                <thead>
+                  <tr><th>Name</th><th>Contact</th><th>Phone</th><th>Email</th><th></th></tr>
+                </thead>
+                <tbody>
+                  {vendors.map(v => (
+                    <tr key={v.id} className="row-hover">
+                      <td className="font-medium text-base-content">{v.name}</td>
+                      <td className="text-base-content/60">{v.contactName || '—'}</td>
+                      <td className="text-base-content/60">{v.phone || '—'}</td>
+                      <td className="text-base-content/60">{v.email || '—'}</td>
+                      <td>
+                        <button onClick={() => deleteVendor(v.id)} className="btn btn-ghost btn-xs text-base-content/30 hover:text-error">
+                          <span className="icon-[tabler--trash] size-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Profile & Logo */}
+      <ProfileSettings />
+
+      <div className="card bg-base-100 shadow-sm">
+        <div className="card-body gap-2">
           <h2 className="text-base-content font-semibold text-base">Integrations</h2>
           <p className="text-base-content/40 text-sm">Manage your connected services.</p>
           <a href="/app/servicetitan" className="link link-primary text-sm w-fit">ServiceTitan settings →</a>
