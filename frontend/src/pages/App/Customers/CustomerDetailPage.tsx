@@ -187,7 +187,7 @@ export function CustomerDetailPage() {
               </thead>
               <tbody>
                 {customer.jobs.map((j, i) => (
-                  <tr key={i} className="hover">
+                  <tr key={i} className="row-hover">
                     <td className="font-medium text-base-content">{j.jobNumber || '—'}</td>
                     <td className="text-base-content/70">{j.jobTypeName || '—'}</td>
                     <td>
@@ -234,7 +234,7 @@ export function CustomerDetailPage() {
                 {customer.invoices.map((inv, i) => {
                   const s = invoiceStatus(inv.balanceRemaining, inv.totalAmount)
                   return (
-                    <tr key={i} className="hover">
+                    <tr key={i} className="row-hover">
                       <td className="font-medium text-base-content">#{inv.stInvoiceId}</td>
                       <td className="text-base-content/60">{fmtDate(inv.invoiceDate)}</td>
                       <td className="text-right text-base-content">{fmt(inv.totalAmount)}</td>
