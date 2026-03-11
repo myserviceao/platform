@@ -135,5 +135,27 @@ public static class DbMigrations
             ALTER TABLE ""Customers"" ADD COLUMN IF NOT EXISTS ""Email"" TEXT;
         ");
 
+
+        // CustomerLocations table
+        await db.Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS ""CustomerLocations"" (
+                ""Id"" SERIAL PRIMARY KEY,
+                ""TenantId"" INTEGER NOT NULL REFERENCES ""Tenants""(""Id"") ON DELETE CASCADE,
+                ""StLocationId"" BIGINT NOT NULL,
+                ""StCustomerId"" BIGINT NOT NULL DEFAULT 0,
+                ""CustomerName"" TEXT NOT NULL DEFAULT '',
+                ""LocationName"" TEXT NOT NULL DEFAULT '',
+                ""Street"" TEXT NOT NULL DEFAULT '',
+                ""City"" TEXT NOT NULL DEFAULT '',
+                ""State"" TEXT NOT NULL DEFAULT '',
+                ""Zip"" TEXT NOT NULL DEFAULT '',
+                ""Latitude"" DOUBLE PRECISION,
+                ""Longitude"" DOUBLE PRECISION,
+                ""IsGeocoded"" BOOLEAN NOT NULL DEFAULT FALSE,
+                ""UpdatedAt"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                UNIQUE(""TenantId"", ""StLocationId"")
+            );
+        ");
+
     }
 }
