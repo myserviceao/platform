@@ -124,7 +124,7 @@ export function CustomersPage() {
                 <tr
                   key={c.id}
                   onClick={() => navigate(`/app/customers/${c.id}`)}
-                  className="hover cursor-pointer"
+                  className="row-hover cursor-pointer"
                 >
                   <td>
                     <div className="flex items-center gap-3">
