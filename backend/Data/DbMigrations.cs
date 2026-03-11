@@ -10,10 +10,8 @@ public static class DbMigrations
 {
     public static async Task RunAsync(AppDbContext db)
     {
-        // Ensure tables exist (EF CreateTable handles this via EnsureCreated)
         await db.Database.EnsureCreatedAsync();
 
-        // Add Customers table if it doesn't exist yet
         await db.Database.ExecuteSqlRawAsync(@"
             CREATE TABLE IF NOT EXISTS ""Customers"" (
                 ""Id"" SERIAL PRIMARY KEY,
@@ -25,7 +23,6 @@ public static class DbMigrations
             );
         ");
 
-        // Add PmCustomers table if it doesn't exist yet
         await db.Database.ExecuteSqlRawAsync(@"
             CREATE TABLE IF NOT EXISTS ""PmCustomers"" (
                 ""Id"" SERIAL PRIMARY KEY,
@@ -39,7 +36,6 @@ public static class DbMigrations
             );
         ");
 
-        // Add Invoices table
         await db.Database.ExecuteSqlRawAsync(@"
             CREATE TABLE IF NOT EXISTS ""Invoices"" (
                 ""Id"" SERIAL PRIMARY KEY,
@@ -55,7 +51,6 @@ public static class DbMigrations
             );
         ");
 
-        // Add Jobs table
         await db.Database.ExecuteSqlRawAsync(@"
             CREATE TABLE IF NOT EXISTS ""Jobs"" (
                 ""Id"" SERIAL PRIMARY KEY,
@@ -73,7 +68,6 @@ public static class DbMigrations
             );
         ");
 
-        // Add Appointments table
         await db.Database.ExecuteSqlRawAsync(@"
             CREATE TABLE IF NOT EXISTS ""Appointments"" (
                 ""Id"" SERIAL PRIMARY KEY,
@@ -89,12 +83,41 @@ public static class DbMigrations
             );
         ");
 
-        // Add AppointmentTechnicians table
         await db.Database.ExecuteSqlRawAsync(@"
             CREATE TABLE IF NOT EXISTS ""AppointmentTechnicians"" (
                 ""Id"" SERIAL PRIMARY KEY,
                 ""AppointmentId"" INTEGER NOT NULL REFERENCES ""Appointments""(""Id"") ON DELETE CASCADE,
                 ""TechnicianName"" TEXT NOT NULL DEFAULT ''
+            );
+        ");
+
+        // Vendors table
+        await db.Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS ""Vendors"" (
+                ""Id"" SERIAL PRIMARY KEY,
+                ""TenantId"" INTEGER NOT NULL REFERENCES ""Tenants""(""Id"") ON DELETE CASCADE,
+                ""Name"" TEXT NOT NULL DEFAULT '',
+                ""ContactName"" TEXT,
+                ""Phone"" TEXT,
+                ""Email"" TEXT,
+                ""CreatedAt"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                ""UpdatedAt"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+            );
+        ");
+
+        // AP Bills table
+        await db.Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS ""ApBills"" (
+                ""Id"" SERIAL PRIMARY KEY,
+                ""TenantId"" INTEGER NOT NULL REFERENCES ""Tenants""(""Id"") ON DELETE CASCADE,
+                ""VendorId"" INTEGER NOT NULL REFERENCES ""Vendors""(""Id"") ON DELETE CASCADE,
+                ""InvoiceNumber"" TEXT NOT NULL DEFAULT '',
+                ""Amount"" NUMERIC(18,2) NOT NULL DEFAULT 0,
+                ""DueDate"" TIMESTAMP WITH TIME ZONE NOT NULL,
+                ""IsPaid"" BOOLEAN NOT NULL DEFAULT FALSE,
+                ""PaidDate"" TIMESTAMP WITH TIME ZONE,
+                ""CreatedAt"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                ""UpdatedAt"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
             );
         ");
     }
