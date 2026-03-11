@@ -1,13 +1,13 @@
-using MyServiceAO.Data;
-using MyServiceAO.Models;
+using System.Net.Http.Headers;
 using Microsoft.EntityFrameworkCore;
+using MyServiceAO.Data;
+using MyServiceAO.Services.ServiceTitan;
 
-namespace MyServiceAO.Services.ServiceTitan;
+namespace MyServiceAO.Services;
 
 /// <summary>
-/// Handles the ServiceTitan OAuth2 client_credentials flow.
-/// ST uses client_credentials (not authorization_code) — tenants provide
-/// their own Client ID + Secret from the ST developer portal.
+/// Manages ServiceTitan OAuth tokens per tenant.
+/// Caches tokens in-memory and refreshes proactively 5 minutes before expiry.
 /// </summary>
 public class ServiceTitanOAuthService
 {
@@ -15,10 +15,14 @@ public class ServiceTitanOAuthService
     private readonly ServiceTitanClient _client;
     private readonly ILogger<ServiceTitanOAuthService> _logger;
 
-    public ServiceTitanOAuthService(
-        AppDbContext db,
-        ServiceTitanClient client,
-        ILogger<ServiceTitanOAuthService> logger)
+    // In-memory cache: tenantId -> (token, expiresAt)
+    private static readonly Dictionary<int, (string Token, DateTime ExpiresAt)> _cache = new();
+    private static readonly object _lock = new();
+
+    // Refresh the token this many minutes before it actually expires
+    private const int RefreshBufferMinutes = 5;
+
+    public ServiceTitanOAuthService(AppDbContext db, ServiceTitanClient client, ILogger<ServiceTitanOAuthService> logger)
     {
         _db = db;
         _client = client;
@@ -26,83 +30,59 @@ public class ServiceTitanOAuthService
     }
 
     /// <summary>
-    /// Exchanges a tenant's ST credentials for an access token and stores it.
-    /// Called when tenant first connects or when token is expired.
-    /// </summary>
-    public async Task<bool> ConnectAsync(int tenantId, string clientId, string clientSecret, string stTenantId)
-    {
-        _logger.LogInformation("[ST OAuth] Connecting tenantId={TenantId}", tenantId);
-
-        var token = await _client.GetAccessTokenAsync(clientId, clientSecret);
-
-        if (token == null)
-        {
-            _logger.LogWarning("[ST OAuth] Failed to get token for tenantId={TenantId}", tenantId);
-            return false;
-        }
-
-        var tenant = await _db.Tenants.FindAsync(tenantId);
-        if (tenant == null) return false;
-
-        tenant.StClientId = clientId;
-        tenant.StClientSecret = clientSecret;
-        tenant.StTenantId = stTenantId;
-        tenant.StAccessToken = token;
-        tenant.StTokenExpiresAt = DateTime.UtcNow.AddMinutes(55); // ST tokens last 60min
-
-        await _db.SaveChangesAsync();
-
-        _logger.LogInformation("[ST OAuth] Token stored for tenantId={TenantId}", tenantId);
-        return true;
-    }
-
-    /// <summary>
-    /// Returns a valid access token for a tenant, refreshing if needed.
+    /// Returns a valid access token for the given tenant, refreshing if needed.
+    /// Returns null if credentials are missing or the token request fails.
     /// </summary>
     public async Task<string?> GetValidTokenAsync(int tenantId)
     {
-        var tenant = await _db.Tenants.FindAsync(tenantId);
-        if (tenant?.StClientId == null || tenant.StClientSecret == null)
-            return null;
-
-        // Refresh if expired or expiring in the next 5 minutes
-        if (tenant.StAccessToken == null ||
-            tenant.StTokenExpiresAt == null ||
-            tenant.StTokenExpiresAt <= DateTime.UtcNow.AddMinutes(5))
+        // Check cache first (with buffer)
+        lock (_lock)
         {
-            _logger.LogInformation("[ST OAuth] Refreshing token for tenantId={TenantId}", tenantId);
-            var newToken = await _client.GetAccessTokenAsync(tenant.StClientId, tenant.StClientSecret);
-            if (newToken == null) return null;
-
-            tenant.StAccessToken = newToken;
-            tenant.StTokenExpiresAt = DateTime.UtcNow.AddMinutes(55);
-            await _db.SaveChangesAsync();
+            if (_cache.TryGetValue(tenantId, out var cached))
+            {
+                var expiresWithBuffer = cached.ExpiresAt.AddMinutes(-RefreshBufferMinutes);
+                if (DateTime.UtcNow < expiresWithBuffer)
+                {
+                    _logger.LogInformation("[OAuth] Using cached token tenantId={TenantId} expiresAt={ExpiresAt}", tenantId, cached.ExpiresAt);
+                    return cached.Token;
+                }
+                _logger.LogInformation("[OAuth] Cached token expiring soon or expired, refreshing tenantId={TenantId}", tenantId);
+            }
         }
 
-        return tenant.StAccessToken;
+        // Need a fresh token - fetch credentials from DB
+        var tenant = await _db.Tenants.FindAsync(tenantId);
+        if (tenant?.StClientId == null || tenant.StClientSecret == null)
+        {
+            _logger.LogWarning("[OAuth] No ST credentials for tenantId={TenantId}", tenantId);
+            return null;
+        }
+
+        var token = await _client.GetAccessTokenAsync(tenant.StClientId, tenant.StClientSecret);
+        if (token == null)
+        {
+            _logger.LogWarning("[OAuth] Failed to get access token for tenantId={TenantId}", tenantId);
+            return null;
+        }
+
+        // ST tokens are valid for 1 hour; store with expiry
+        var expiresAt = DateTime.UtcNow.AddMinutes(55); // 5 min buffer built in
+
+        lock (_lock)
+        {
+            _cache[tenantId] = (token, expiresAt);
+        }
+
+        _logger.LogInformation("[OAuth] Token refreshed tenantId={TenantId} expiresAt={ExpiresAt}", tenantId, expiresAt);
+        return token;
     }
 
-    /// <summary>
-    /// Disconnects a tenant from ServiceTitan by clearing stored credentials.
-    /// </summary>
-    public async Task DisconnectAsync(int tenantId)
+    /// <summary>Force-clears the cached token for a tenant (e.g. after credential change).</summary>
+    public void InvalidateCache(int tenantId)
     {
-        var tenant = await _db.Tenants.FindAsync(tenantId);
-        if (tenant == null) return;
-
-        tenant.StClientId = null;
-        tenant.StClientSecret = null;
-        tenant.StTenantId = null;
-        tenant.StAccessToken = null;
-        tenant.StTokenExpiresAt = null;
-
-        await _db.SaveChangesAsync();
-        _logger.LogInformation("[ST OAuth] Disconnected tenantId={TenantId}", tenantId);
-    }
-
-    public async Task<bool> IsConnectedAsync(int tenantId)
-    {
-        var tenant = await _db.Tenants.FindAsync(tenantId);
-        return tenant?.StAccessToken != null;
+        lock (_lock)
+        {
+            _cache.Remove(tenantId);
+        }
     }
 }
