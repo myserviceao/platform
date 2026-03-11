@@ -13,6 +13,18 @@ public static class DbMigrations
         // Ensure tables exist (EF CreateTable handles this via EnsureCreated)
         await db.Database.EnsureCreatedAsync();
 
+        // Add Customers table if it doesn't exist yet
+        await db.Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS ""Customers"" (
+                ""Id"" SERIAL PRIMARY KEY,
+                ""TenantId"" INTEGER NOT NULL REFERENCES ""Tenants""(""Id"") ON DELETE CASCADE,
+                ""StCustomerId"" BIGINT NOT NULL,
+                ""Name"" TEXT NOT NULL DEFAULT '',
+                ""UpdatedAt"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                UNIQUE(""TenantId"", ""StCustomerId"")
+            );
+        ");
+
         // Add PmCustomers table if it doesn't exist yet
         await db.Database.ExecuteSqlRawAsync(@"
             CREATE TABLE IF NOT EXISTS ""PmCustomers"" (
