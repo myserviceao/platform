@@ -277,7 +277,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               className="max-h-16 max-w-[10rem] object-contain"
             />
           ) : (
-            <div className="avatar placeholder">
+            <div className="avatar avatar-placeholder">
               <div className="bg-primary text-primary-content rounded-full w-16">
                 <span className="text-xl font-semibold">{initials}</span>
               </div>
@@ -395,7 +395,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 ))}
               </ul>
             </div>
-            <div className="avatar placeholder">
+            <div className="avatar avatar-placeholder">
               <div className="bg-primary text-primary-content rounded-full w-8">
                 <span className="text-xs font-semibold">{initials}</span>
               </div>
