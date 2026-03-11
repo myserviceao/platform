@@ -132,11 +132,25 @@ public class DashboardController : ControllerBase
             return new { Count = dayAppts.Count, Items = dayAppts };
         }
 
+        // AP summary
+        var unpaidAp = await _db.ApBills
+            .Where(b => b.TenantId == tenantId.Value && !b.IsPaid)
+            .SumAsync(b => b.Amount);
+        var apNextDue = await _db.ApBills
+            .Where(b => b.TenantId == tenantId.Value && !b.IsPaid)
+            .OrderBy(b => b.DueDate)
+            .Select(b => (DateTime?)b.DueDate)
+            .FirstOrDefaultAsync();
+        var apNextDueDays = apNextDue.HasValue ? (int)(apNextDue.Value - DateTime.UtcNow).TotalDays : 0;
+
         return Ok(new
         {
             Synced = snapshot != null,
             SnapshotTakenAt = snapshot?.SnapshotTakenAt,
             TotalAR = totalAr,
+            TotalAP = unpaidAp,
+            ApNextDueDays = apNextDueDays,
+            NetPosition = totalAr - unpaidAp,
             ArOldestDays = arRaw.Any() ? (int)(now - arRaw.Min(i => i.InvoiceDate)).TotalDays : 0,
             ARaging = arAging,
             ARbyCustomer = arByCustomer,
