@@ -13,6 +13,7 @@ public class Invoice
     public decimal TotalAmount { get; set; }
     public decimal BalanceRemaining { get; set; }
 
+    // ST returns "date" field — used for aging buckets and revenue calculations
     public DateTime InvoiceDate { get; set; }
 
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
