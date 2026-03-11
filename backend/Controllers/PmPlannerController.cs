@@ -98,48 +98,82 @@ public class PmPlannerController : ControllerBase
 
         var ungeocoded = await _db.CustomerLocations
             .Where(l => l.TenantId == tenantId.Value && !l.IsGeocoded && l.Street != "")
-            .Take(50)
+            .Take(10000) // Census allows up to 10k at once
             .ToListAsync();
+
+        if (ungeocoded.Count == 0)
+            return Ok(new { geocoded = 0, failed = 0, remaining = 0 });
+
+        // Build CSV for US Census Batch Geocoder
+        // Format: Unique ID, Street, City, State, ZIP
+        var csvLines = new System.Text.StringBuilder();
+        foreach (var loc in ungeocoded)
+        {
+            var street = loc.Street.Replace(",", " ").Replace(""", "");
+            var city = loc.City.Replace(",", " ").Replace(""", "");
+            csvLines.AppendLine($"{loc.Id},"{street}","{city}","{loc.State}","{loc.Zip}"");
+        }
 
         int success = 0;
         int failed = 0;
 
-        foreach (var loc in ungeocoded)
+        try
         {
-            try
+            using var formContent = new MultipartFormDataContent();
+            var csvBytes = System.Text.Encoding.UTF8.GetBytes(csvLines.ToString());
+            formContent.Add(new ByteArrayContent(csvBytes), "addressFile", "addresses.csv");
+            formContent.Add(new StringContent("Public_AR_Current"), "benchmark");
+            formContent.Add(new StringContent("ACS2023_Current"), "vintage");
+
+            var response = await _http.PostAsync(
+                "https://geocoding.geo.census.gov/geocoder/locations/addressbatch",
+                formContent
+            );
+
+            if (response.IsSuccessStatusCode)
             {
-                var address = Uri.EscapeDataString($"{loc.Street}, {loc.City}, {loc.State} {loc.Zip}");
-                var url = $"https://nominatim.openstreetmap.org/search?q={address}&format=json&limit=1";
+                var resultCsv = await response.Content.ReadAsStringAsync();
+                var locMap = ungeocoded.ToDictionary(l => l.Id);
 
-                var request = new HttpRequestMessage(HttpMethod.Get, url);
-                request.Headers.Add("User-Agent", "MyServiceAO/1.0");
-                var response = await _http.SendAsync(request);
-
-                if (response.IsSuccessStatusCode)
+                foreach (var line in resultCsv.Split('
+', StringSplitOptions.RemoveEmptyEntries))
                 {
-                    var json = await response.Content.ReadAsStringAsync();
-                    var doc = System.Text.Json.JsonDocument.Parse(json);
-                    var arr = doc.RootElement;
-
-                    if (arr.GetArrayLength() > 0)
+                    try
                     {
-                        var first = arr[0];
-                        if (first.TryGetProperty("lat", out var latProp) && first.TryGetProperty("lon", out var lonProp))
+                        // Parse CSV: ID,"Input Address","Match/No_Match","Exact/Non_Exact","Matched Address",lon/lat,"TIGER Line ID","Side"
+                        var parts = ParseCsvLine(line);
+                        if (parts.Count < 6) continue;
+
+                        if (!int.TryParse(parts[0].Trim('"'), out var locId)) continue;
+                        if (!locMap.TryGetValue(locId, out var loc)) continue;
+
+                        var matchStatus = parts[2].Trim('"');
+                        if (matchStatus != "Match") { failed++; continue; }
+
+                        // Coordinates are in field index 5 as "lon,lat"
+                        var coords = parts[5].Trim('"').Split(',');
+                        if (coords.Length == 2 &&
+                            double.TryParse(coords[0], out var lon) &&
+                            double.TryParse(coords[1], out var lat))
                         {
-                            loc.Latitude = double.Parse(latProp.GetString()!);
-                            loc.Longitude = double.Parse(lonProp.GetString()!);
+                            loc.Longitude = lon;
+                            loc.Latitude = lat;
                             loc.IsGeocoded = true;
                             success++;
                         }
+                        else { failed++; }
                     }
+                    catch { failed++; }
                 }
-
-                await Task.Delay(1100);
             }
-            catch
+            else
             {
-                failed++;
+                failed = ungeocoded.Count;
             }
+        }
+        catch
+        {
+            failed = ungeocoded.Count;
         }
 
         await _db.SaveChangesAsync();
@@ -150,6 +184,25 @@ public class PmPlannerController : ControllerBase
             failed,
             remaining = await _db.CustomerLocations.CountAsync(l => l.TenantId == tenantId.Value && !l.IsGeocoded && l.Street != "")
         });
+    }
+
+    /// <summary>
+    /// Parse a CSV line handling quoted fields with commas inside.
+    /// </summary>
+    private static List<string> ParseCsvLine(string line)
+    {
+        var fields = new List<string>();
+        bool inQuotes = false;
+        var current = new System.Text.StringBuilder();
+
+        foreach (var ch in line)
+        {
+            if (ch == '"') { inQuotes = !inQuotes; current.Append(ch); }
+            else if (ch == ',' && !inQuotes) { fields.Add(current.ToString()); current.Clear(); }
+            else { current.Append(ch); }
+        }
+        fields.Add(current.ToString());
+        return fields;
     }
 
     private static List<object> ClusterByProximity(List<CustomerPoint> points, double radiusMiles)
