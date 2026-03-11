@@ -289,19 +289,29 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto p-3">
-          <ul className="menu menu-sm gap-0.5 p-0">
+          <ul className="accordion menu menu-sm gap-0.5 p-0" data-accordion>
             <li className="menu-title text-xs uppercase tracking-wider opacity-50 px-2 pt-2 pb-1">Main</li>
             {navItems.map((entry, idx) => {
               if (isGroup(entry)) {
                 const groupActive = entry.children.some(c => location.pathname.startsWith(c.path))
                 return (
-                  <li key={idx}>
-                    <details open={groupActive || undefined}>
-                      <summary className={groupActive ? 'text-primary' : ''}>
-                        <span className={`${entry.icon} size-4.5`} />
-                        {entry.label}
-                      </summary>
-                      <ul>
+                  <li key={idx} className={`accordion-item${groupActive ? ' active' : ''}`}>
+                    <button
+                      type="button"
+                      className="accordion-toggle accordion-item-active:bg-base-content/5 inline-flex w-full items-center gap-2 rounded-lg p-2 text-sm font-medium text-base-content/80 hover:bg-base-content/5"
+                      aria-controls={`nav-collapse-${idx}`}
+                      aria-expanded={groupActive}
+                    >
+                      <span className={`${entry.icon} size-4.5`} />
+                      <span className="flex-1 text-left">{entry.label}</span>
+                      <span className="icon-[tabler--chevron-right] accordion-item-active:rotate-90 size-4 shrink-0 transition-transform duration-300" />
+                    </button>
+                    <div
+                      id={`nav-collapse-${idx}`}
+                      className="accordion-content w-full overflow-hidden transition-[height] duration-300"
+                      role="region"
+                    >
+                      <ul className="menu menu-sm ps-6 pe-0 py-1">
                         {entry.children.map((child) => {
                           const childActive = location.pathname.startsWith(child.path)
                           return (
@@ -314,7 +324,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                           )
                         })}
                       </ul>
-                    </details>
+                    </div>
                   </li>
                 )
               }
