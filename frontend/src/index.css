@@ -2,13 +2,12 @@
 @plugin "flyonui" {
   themes: light --default, dark --prefersdark, corporate, gourmet, luxury, soft, shadcn, slack, spotify, vscode, claude, pastel, valorant, ghibli, mintlify, perplexity, black;
 }
-@import "./node_modules/flyonui/variants.css";
+@import "flyonui/variants.css";
 
 @theme {
   --font-sans: 'Inter', system-ui, sans-serif;
 }
 
-/* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
