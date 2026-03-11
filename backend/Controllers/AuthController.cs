@@ -9,6 +9,7 @@ public class AuthController : ControllerBase
 {
     private readonly AuthService _auth;
     private const string SessionKey = "userId";
+    private const string TenantSessionKey = "tenantId";
 
     public AuthController(AuthService auth)
     {
@@ -24,6 +25,7 @@ public class AuthController : ControllerBase
             return Unauthorized(new { error = "Invalid email or password." });
 
         HttpContext.Session.SetInt32(SessionKey, user.Id);
+        HttpContext.Session.SetInt32(TenantSessionKey, user.TenantId);
 
         return Ok(new
         {
@@ -53,6 +55,7 @@ public class AuthController : ControllerBase
                 req.CompanyName, req.Email, req.Password, req.FirstName, req.LastName);
 
             HttpContext.Session.SetInt32(SessionKey, user.Id);
+            HttpContext.Session.SetInt32(TenantSessionKey, user.TenantId);
 
             return Ok(new
             {

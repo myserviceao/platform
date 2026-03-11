@@ -15,7 +15,11 @@
     "lucide-react": "^0.469.0",
     "clsx": "^2.1.1",
     "tailwind-merge": "^2.5.5",
+<<<<<<< HEAD
     "flyonui": "^2.4.0"
+=======
+    "flyonui": "^1.2.4"
+>>>>>>> 622fa3a658643b805f9a000b7b37bfa2a38411d5
   },
   "devDependencies": {
     "@types/react": "^18.3.17",
