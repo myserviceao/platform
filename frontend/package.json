@@ -14,7 +14,8 @@
     "react-router-dom": "^6.28.0",
     "lucide-react": "^0.469.0",
     "clsx": "^2.1.1",
-    "tailwind-merge": "^2.5.5"
+    "tailwind-merge": "^2.5.5",
+    "flyonui": "^1.2.4"
   },
   "devDependencies": {
     "@types/react": "^18.3.17",
