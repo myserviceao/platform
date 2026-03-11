@@ -260,5 +260,16 @@ public class DashboardController : ControllerBase
         return Content(raw, "application/json");
     }
 
+    [HttpGet("raw-job-export")]
+    public async Task<IActionResult> GetRawJobExport()
+    {
+        var tenantId = HttpContext.Session.GetInt32("tenantId");
+        if (tenantId == null) return Unauthorized();
+        var raw = await _sync.GetRawJobExportAsync(tenantId.Value);
+        return Content(raw, "application/json");
+    }
+
+
+
 
 }
