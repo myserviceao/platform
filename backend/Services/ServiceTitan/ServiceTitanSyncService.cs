@@ -402,19 +402,19 @@ public class ServiceTitanSyncService
 
                 // Build a map of jobId -> holdReasonId from appointment export
                 var jobHoldReasons = new Dictionary<long, long>();
-                string? apptContinue = null;
-                bool apptHasMore = true;
-                while (apptHasMore)
+                string? hrApptContinue = null;
+                bool hrApptHasMore = true;
+                while (hrApptHasMore)
                 {
-                    var apptRaw = await _client.GetAppointmentsExportAsync(token, stTenantId, apptContinue);
-                    var apptDoc = JsonDocument.Parse(apptRaw);
-                    var apptRoot = apptDoc.RootElement;
-                    apptHasMore = apptRoot.TryGetProperty("hasMore", out var ahm) && ahm.GetBoolean();
-                    apptContinue = apptRoot.TryGetProperty("continueFrom", out var acf) ? acf.GetString() : null;
+                    var hrApptRaw = await _client.GetAppointmentsExportAsync(token, stTenantId, hrApptContinue);
+                    var hrApptDoc = JsonDocument.Parse(hrApptRaw);
+                    var hrApptRoot = hrApptDoc.RootElement;
+                    hrApptHasMore = hrApptRoot.TryGetProperty("hasMore", out var ahm) && ahm.GetBoolean();
+                    hrApptContinue = hrApptRoot.TryGetProperty("continueFrom", out var acf) ? acf.GetString() : null;
 
-                    if (!apptRoot.TryGetProperty("data", out var apptData)) break;
+                    if (!hrApptRoot.TryGetProperty("data", out var hrApptData)) break;
 
-                    foreach (var appt in apptData.EnumerateArray())
+                    foreach (var appt in hrApptData.EnumerateArray())
                     {
                         var apptStatus = appt.TryGetProperty("status", out var asProp) && asProp.ValueKind == JsonValueKind.String
                             ? asProp.GetString() : "";
@@ -433,7 +433,7 @@ public class ServiceTitanSyncService
                         }
                     }
 
-                    if (!apptHasMore || apptContinue == null) break;
+                    if (!hrApptHasMore || hrApptContinue == null) break;
                 }
 
                 _logger.LogInformation("[Sync] Found {Count} appointment hold reasons", jobHoldReasons.Count);
