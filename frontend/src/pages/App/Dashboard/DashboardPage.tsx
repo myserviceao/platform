@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 
-// ── Types ──────────────────────────────────────────────────────────────────
+// ââ Types ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 interface ArBucket {
   bucket0_30: number
   bucket31_60: number
@@ -47,6 +47,9 @@ interface DashboardData {
   revenueThisMonth: number
   revenueLastMonth: number
   forecastedRevenue: number
+  totalAP: number
+  apNextDueDays: number
+  netPosition: number
   daysInMonth: number
   daysElapsed: number
   openWorkOrders: OpenJob[]
@@ -62,7 +65,7 @@ interface DashboardData {
   dayAfterLabel: string
 }
 
-// ── Formatters ─────────────────────────────────────────────────────────────
+// ââ Formatters âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
 }
@@ -92,7 +95,7 @@ function daysSinceStr(createdOn: string | null) {
   return Math.floor((Date.now() - new Date(createdOn).getTime()) / 86400000)
 }
 
-// ── Stat Tile (Patriot-style with colored top border) ──────────────────────
+// ââ Stat Tile (Patriot-style with colored top border) ââââââââââââââââââââââ
 function StatTile({ borderColor, label, value, sub, subColor }: {
   borderColor: string
   label: string
@@ -109,7 +112,7 @@ function StatTile({ borderColor, label, value, sub, subColor }: {
   )
 }
 
-// ── Main ───────────────────────────────────────────────────────────────────
+// ââ Main âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 export function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -135,7 +138,7 @@ export function DashboardPage() {
       if (!res.ok) { setError(json.error || 'Sync failed'); return }
       setData(json)
     } catch {
-      setError('Network error — please try again')
+      setError('Network error â please try again')
     } finally {
       setSyncing(false)
     }
@@ -198,7 +201,7 @@ export function DashboardPage() {
         </div>
       )}
 
-      {/* ── Row 1: Financial KPIs (5 cards) ── */}
+      {/* ââ Row 1: Financial KPIs (5 cards) ââ */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <StatTile
           borderColor="border-t-blue-500"
@@ -209,33 +212,32 @@ export function DashboardPage() {
         <StatTile
           borderColor="border-t-cyan-400"
           label="Total AP"
-          value="$0"
-          sub="coming soon"
-          subColor="text-base-content/30"
+          value={fmt(d?.totalAP ?? 0)}
+          sub={(d?.totalAP ?? 0) > 0 ? `next due ${d?.apNextDueDays ?? 0}d` : 'nothing owed'}
         />
         <StatTile
           borderColor="border-t-emerald-400"
           label="Net Position"
           value={fmt(arTotal)}
-          sub={arTotal > 0 ? `AR covers AP —` : '—'}
+          sub={arTotal > 0 ? `AR covers AP â` : 'â'}
           subColor="text-success"
         />
         <StatTile
           borderColor="border-t-green-500"
           label="Month Revenue"
           value={fmt(d?.revenueThisMonth ?? 0)}
-          sub={change ? `${change.up ? '↑' : '↓'} ${change.pct}% vs ${prevMonthName}` : `Last: ${fmtShort(d?.revenueLastMonth ?? 0)}`}
+          sub={change ? `${change.up ? 'â' : 'â'} ${change.pct}% vs ${prevMonthName}` : `Last: ${fmtShort(d?.revenueLastMonth ?? 0)}`}
           subColor={change ? (change.up ? 'text-success' : 'text-error') : undefined}
         />
         <StatTile
           borderColor="border-t-indigo-500"
           label="Forecasted Revenue"
           value={fmt(forecastedRevenue)}
-          sub={`${daysLeft}d left · ${d?.openWoCount ?? 0} open jobs`}
+          sub={`${daysLeft}d left Â· ${d?.openWoCount ?? 0} open jobs`}
         />
       </div>
 
-      {/* ── Row 2: Ops KPIs (3 cards) ── */}
+      {/* ââ Row 2: Ops KPIs (3 cards) ââ */}
       <div className="grid grid-cols-3 gap-3">
         <StatTile
           borderColor="border-t-red-500"
@@ -307,7 +309,7 @@ export function DashboardPage() {
                           ? item.techs.join(', ')
                           : <span className="text-base-content/30 italic">Unassigned</span>}
                       </td>
-                      <td className="text-sm font-mono text-primary">{item.jobNumber || '—'}</td>
+                      <td className="text-sm font-mono text-primary">{item.jobNumber || 'â'}</td>
                       <td className="text-sm font-medium">{item.customerName}</td>
                       <td className="text-sm text-base-content/60">{fmtTime(item.start)}</td>
                     </tr>
@@ -349,7 +351,7 @@ export function DashboardPage() {
                       return (
                         <tr key={i} className="hover:bg-base-200/40">
                           <td className="text-sm font-medium max-w-[8rem] truncate">{job.customerName}</td>
-                          <td className="text-sm font-mono text-primary text-right">{job.jobNumber || '—'}</td>
+                          <td className="text-sm font-mono text-primary text-right">{job.jobNumber || 'â'}</td>
                           <td className={`text-sm text-right font-medium ${age >= 90 ? 'text-error' : age >= 30 ? 'text-warning' : 'text-base-content/60'}`}>
                             {age}d
                           </td>
@@ -376,9 +378,9 @@ export function DashboardPage() {
             {aging && (
               <div className="px-4 py-3 space-y-2 border-b border-base-200">
                 {[
-                  { label: '0–30d',  val: aging.bucket0_30,   color: 'bg-success' },
-                  { label: '31–60d', val: aging.bucket31_60,  color: 'bg-warning' },
-                  { label: '61–90d', val: aging.bucket61_90,  color: 'bg-orange-400' },
+                  { label: '0â30d',  val: aging.bucket0_30,   color: 'bg-success' },
+                  { label: '31â60d', val: aging.bucket31_60,  color: 'bg-warning' },
+                  { label: '61â90d', val: aging.bucket61_90,  color: 'bg-orange-400' },
                   { label: '90d+',   val: aging.bucket90Plus, color: 'bg-error' },
                 ].map(({ label, val, color }) => (
                   <div key={label} className="flex items-center gap-2">
