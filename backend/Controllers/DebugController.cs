@@ -19,11 +19,11 @@ public class DebugController : ControllerBase
     }
 
     /// <summary>
-    /// Returns raw export fields for the first 10 completed jobs on or after 2025-11-01
-    /// so we can inspect what completedOn/modifiedOn actually look like in export data.
+    /// Fetch all PM jobs for a specific ST customer ID from the export 
+    /// and return all date fields raw so we can see exactly what completedOn contains.
     /// </summary>
-    [HttpGet("job-fields")]
-    public async Task<IActionResult> JobFields()
+    [HttpGet("customer-pm-jobs")]
+    public async Task<IActionResult> CustomerPmJobs([FromQuery] long customerId)
     {
         var tenantId = HttpContext.Session.GetInt32("tenantId");
         if (tenantId == null) return Unauthorized();
@@ -34,22 +34,51 @@ public class DebugController : ControllerBase
         var token = await _oauth.GetValidTokenAsync(tenantId.Value);
         if (token == null) return BadRequest("no token");
 
-        var json = await _client.GetJobsExportAsync(token, tenant.StTenantId, "2025-11-01");
-        var doc = JsonDocument.Parse(json);
-        var jobs = doc.RootElement.GetProperty("data").EnumerateArray()
-            .Take(20)
-            .Select(j => new {
-                id = j.TryGetProperty("id", out var id) ? id.GetRawText() : "null",
-                jobNumber = j.TryGetProperty("jobNumber", out var jn) ? jn.GetRawText() : "null",
-                jobStatus = j.TryGetProperty("jobStatus", out var js) ? js.GetString() : "null",
-                completedOn = j.TryGetProperty("completedOn", out var co) ? co.GetRawText() : "MISSING",
-                modifiedOn = j.TryGetProperty("modifiedOn", out var mo) ? mo.GetRawText() : "MISSING",
-                jobTypeId = j.TryGetProperty("jobTypeId", out var jt) ? jt.GetRawText() : "null",
-                customerId = j.TryGetProperty("customerId", out var cid) ? cid.GetRawText() : "null",
-                allKeys = string.Join(",", j.EnumerateObject().Select(p => p.Name))
-            })
-            .ToList();
+        // Fetch 18 months of jobs
+        var allJobs = new List<object>();
+        string? continueFrom = DateTime.UtcNow.AddMonths(-18).ToString("yyyy-MM-dd");
+        int pages = 0;
 
-        return Ok(jobs);
+        do
+        {
+            var json = await _client.GetJobsExportAsync(token, tenant.StTenantId, continueFrom);
+            var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (!root.TryGetProperty("data", out var data)) break;
+
+            foreach (var job in data.EnumerateArray())
+            {
+                // Filter to this customer
+                if (!job.TryGetProperty("customerId", out var cid)) continue;
+                if (cid.ValueKind != JsonValueKind.Number) continue;
+                if (cid.GetInt64() != customerId) continue;
+
+                // Return ALL date/status fields raw
+                allJobs.Add(new {
+                    id = SafeGet(job, "id"),
+                    jobNumber = SafeGet(job, "jobNumber"),
+                    jobStatus = SafeGet(job, "jobStatus"),
+                    jobTypeId = SafeGet(job, "jobTypeId"),
+                    completedOn_raw = SafeGet(job, "completedOn"),
+                    completedOn_kind = job.TryGetProperty("completedOn", out var co) ? co.ValueKind.ToString() : "MISSING",
+                    modifiedOn_raw = SafeGet(job, "modifiedOn"),
+                    createdOn_raw = SafeGet(job, "createdOn"),
+                    actualStart = SafeGet(job, "actualStart"),
+                    actualEnd = SafeGet(job, "actualEnd"),
+                });
+            }
+
+            var hasMore = root.TryGetProperty("hasMore", out var hm) && hm.GetBoolean();
+            continueFrom = hasMore && root.TryGetProperty("continueFrom", out var cf) ? cf.GetString() : null;
+            pages++;
+            if (!hasMore || pages > 10) break;
+        } while (continueFrom != null);
+
+        return Ok(new { customerId, totalJobsFound = allJobs.Count, jobs = allJobs });
+    }
+
+    private static string SafeGet(JsonElement el, string prop)
+    {
+        return el.TryGetProperty(prop, out var v) ? v.GetRawText() : "null";
     }
 }
