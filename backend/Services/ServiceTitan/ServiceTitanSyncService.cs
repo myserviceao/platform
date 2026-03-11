@@ -69,9 +69,6 @@ public class ServiceTitanSyncService
         tenant.LastSyncedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
-        _logger.LogInformation("[ST Sync] Complete tenantId={TenantId} RevThis={RevThis} AR={AR} Jobs={Jobs} PMs={PMs} Errors={Err}",
-            tenantId, snapshot.RevenueThisMonth, snapshot.AccountsReceivable, snapshot.OpenJobCount, snapshot.OverduePmCount, errors.Count);
-
         return new SyncResult { Success = true, SyncedAt = snapshot.SnapshotTakenAt, Error = errors.Count > 0 ? string.Join("; ", errors) : null };
     }
 
@@ -159,7 +156,7 @@ public class ServiceTitanSyncService
     private async Task SyncJobsAsync(string token, string stTenantId, DashboardSnapshot snapshot, string from, Dictionary<long, string> jobTypeMap, Dictionary<long, DateTime> lastPmByCustomer)
     {
         var closedStatuses = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Completed", "Canceled" };
-        int openJobs = 0, totalRecords = 0, pmJobsFound = 0;
+        int openJobs = 0, totalRecords = 0, pmJobsFound = 0, pmSkippedNoDate = 0;
         string? continueFrom = from;
 
         do
@@ -174,13 +171,24 @@ public class ServiceTitanSyncService
                 var status = job.TryGetProperty("jobStatus", out var s) ? s.GetString() ?? "" : "";
                 if (!closedStatuses.Contains(status)) openJobs++;
                 if (!status.Equals("Completed", StringComparison.OrdinalIgnoreCase)) continue;
+
+                // Check if this is a PM job type
                 if (!job.TryGetProperty("jobTypeId", out var jtProp) || jtProp.ValueKind != JsonValueKind.Number) continue;
                 if (!jobTypeMap.TryGetValue(jtProp.GetInt64(), out var jobTypeName)) continue;
                 if (!PmKeywords.Any(k => jobTypeName.ToLower().Contains(k))) continue;
+
                 if (!job.TryGetProperty("customerId", out var cProp) || cProp.ValueKind != JsonValueKind.Number) continue;
                 var customerId = cProp.GetInt64();
-                var completedOn = ParseDateTime(job, "completedOn") ?? ParseDateTime(job, "modifiedOn");
-                if (completedOn == null) continue;
+
+                // CRITICAL: Only use completedOn. Do NOT fall back to modifiedOn.
+                // modifiedOn reflects the last edit time, not when the PM was performed.
+                var completedOn = ParseDateTime(job, "completedOn");
+                if (completedOn == null)
+                {
+                    pmSkippedNoDate++;
+                    continue;
+                }
+
                 pmJobsFound++;
                 if (!lastPmByCustomer.TryGetValue(customerId, out var existing) || completedOn > existing)
                     lastPmByCustomer[customerId] = completedOn.Value;
@@ -190,7 +198,8 @@ public class ServiceTitanSyncService
             if (!hasMore) break;
         } while (continueFrom != null);
 
-        _logger.LogInformation("[ST Sync] Jobs processed={Total} openJobs={Open} pmJobs={PM}", totalRecords, openJobs, pmJobsFound);
+        _logger.LogInformation("[ST Sync] Jobs processed={Total} openJobs={Open} pmFound={PM} pmSkippedNoDate={Skipped}",
+            totalRecords, openJobs, pmJobsFound, pmSkippedNoDate);
         snapshot.OpenJobCount = openJobs;
     }
 
