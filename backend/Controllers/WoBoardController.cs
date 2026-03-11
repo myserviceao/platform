@@ -184,7 +184,8 @@ public class WoBoardController : ControllerBase
             totalAmount = holdJobs.Sum(j => j.TotalAmount),
             columns
         });
-    
+    }
+
     /// <summary>
     /// GET /api/wo-board/debug-hold/{stJobId}
     /// Debug: shows the raw ST job history for a hold job
@@ -211,7 +212,4 @@ public class WoBoardController : ControllerBase
             return Ok(new { error = ex.Message });
         }
     }
-
-}
-
 }
