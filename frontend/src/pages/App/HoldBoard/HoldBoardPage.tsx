@@ -23,12 +23,23 @@ interface HoldData {
   totalHolds: number
   holdReasonCount: number
   totalAmount: number
+  holdReasons: string[]
   columns: HoldColumn[]
 }
 
 function fmt(n: number) {
   if (n <= 0) return ''
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 })
+}
+
+async function assignReason(jobId: number, reason: string, onDone: () => void) {
+  await fetch(\`/api/wo-board/holds/\${jobId}/reason\`, {
+    method: 'PUT',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reason })
+  })
+  onDone()
 }
 
 export function HoldBoardPage() {
@@ -122,7 +133,7 @@ export function HoldBoardPage() {
                           <span className="text-sm font-medium text-base-content leading-tight">{job.customerName}</span>
                           <span className="font-mono text-xs text-primary shrink-0">#{job.jobNumber}</span>
                         </div>
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-2">
                             {job.jobTypeName && (
                               <span className="text-[10px] text-base-content/50 bg-base-content/5 rounded px-1.5 py-0.5">{job.jobTypeName}</span>
@@ -135,6 +146,18 @@ export function HoldBoardPage() {
                             {job.daysSince}d
                           </span>
                         </div>
+                        {data?.holdReasons && data.holdReasons.length > 0 && (
+                          <select
+                            className="select select-xs w-full text-xs"
+                            value={job.holdReasonName || ''}
+                            onChange={e => assignReason(job.id, e.target.value, fetchData)}
+                          >
+                            <option value="">— Move to —</option>
+                            {data.holdReasons.map(r => (
+                              <option key={r} value={r}>{r}</option>
+                            ))}
+                          </select>
+                        )}
                       </div>
                     ))
                   )}
