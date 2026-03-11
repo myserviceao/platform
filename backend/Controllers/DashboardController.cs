@@ -278,6 +278,17 @@ public class DashboardController : ControllerBase
         return Content(raw, "application/json");
     }
 
+    [HttpGet("hold-jobs-raw")]
+    public async Task<IActionResult> GetHoldJobsRaw()
+    {
+        var tenantId = HttpContext.Session.GetInt32("tenantId");
+        if (tenantId == null) return Unauthorized();
+        var raw = await _sync.GetHoldJobsRawAsync(tenantId.Value);
+        return Content(raw, "application/json");
+    }
+
+
+
 
 
 
