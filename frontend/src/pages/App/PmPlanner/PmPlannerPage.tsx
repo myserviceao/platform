@@ -22,6 +22,9 @@ interface Cluster {
 
 interface PlannerData {
   totalCustomers: number
+  overdueCount: number
+  comingDueCount: number
+  noPmCount: number
   totalClusters: number
   notGeocoded: number
   radiusMinutes: number
@@ -90,18 +93,26 @@ export function PmPlannerPage() {
 
       {/* Stats + radius control */}
       <div className="flex items-center gap-4">
-        <div className="grid grid-cols-3 gap-3 flex-1">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 flex-1">
           <div className="rounded-box border border-base-content/10 bg-base-100 p-3 text-center">
             <div className="text-xl font-bold text-base-content">{data?.totalCustomers ?? 0}</div>
-            <div className="text-xs text-base-content/50">Customers to schedule</div>
+            <div className="text-xs text-base-content/50">Total to schedule</div>
+          </div>
+          <div className="rounded-box border border-error/20 bg-base-100 p-3 text-center">
+            <div className="text-xl font-bold text-error">{data?.overdueCount ?? 0}</div>
+            <div className="text-xs text-base-content/50">Overdue</div>
+          </div>
+          <div className="rounded-box border border-warning/20 bg-base-100 p-3 text-center">
+            <div className="text-xl font-bold text-warning">{data?.comingDueCount ?? 0}</div>
+            <div className="text-xs text-base-content/50">Coming Due</div>
           </div>
           <div className="rounded-box border border-base-content/10 bg-base-100 p-3 text-center">
+            <div className="text-xl font-bold text-base-content/60">{data?.noPmCount ?? 0}</div>
+            <div className="text-xs text-base-content/50">No PM on record</div>
+          </div>
+          <div className="rounded-box border border-primary/20 bg-base-100 p-3 text-center">
             <div className="text-xl font-bold text-primary">{data?.clusters?.filter(c => c.count > 1).length ?? 0}</div>
             <div className="text-xs text-base-content/50">Groups of 2+</div>
-          </div>
-          <div className="rounded-box border border-base-content/10 bg-base-100 p-3 text-center">
-            <div className="text-xl font-bold text-warning">{data?.notGeocoded ?? 0}</div>
-            <div className="text-xs text-base-content/50">Not geocoded yet</div>
           </div>
         </div>
         <div className="rounded-box border border-base-content/10 bg-base-100 p-3">
@@ -123,7 +134,7 @@ export function PmPlannerPage() {
       {data?.notGeocoded && data.notGeocoded > 0 && (
         <div className="alert alert-soft alert-warning text-sm">
           <span className="icon-[tabler--alert-triangle] size-4 shrink-0" />
-          {data.notGeocoded} customers don't have geocoded addresses yet. Click "Geocode Addresses" to locate them on the map. This may take a moment.
+          {data.notGeocoded} customers need their addresses geocoded. Click "Geocode Addresses" to locate them on the map. This may take a moment.
         </div>
       )}
 
@@ -177,11 +188,11 @@ export function PmPlannerPage() {
                               <td className="font-medium text-base-content text-sm">{c.customerName}</td>
                               <td className="text-xs text-base-content/60">{c.address}</td>
                               <td>
-                                <span className={`badge badge-soft badge-xs ${c.pmStatus === 'Overdue' ? 'badge-error' : 'badge-warning'}`}>
-                                  {c.pmStatus === 'ComingDue' ? 'Coming Due' : c.pmStatus}
+                                <span className={`badge badge-soft badge-xs ${c.pmStatus === 'Overdue' ? 'badge-error' : c.pmStatus === 'NoPm' ? 'badge-ghost' : 'badge-warning'}`}>
+                                  {c.pmStatus === 'ComingDue' ? 'Coming Due' : c.pmStatus === 'NoPm' ? 'No PM' : c.pmStatus}
                                 </span>
                               </td>
-                              <td className="text-sm text-base-content/60">{c.daysSince}d</td>
+                              <td className="text-sm text-base-content/60">{c.pmStatus === 'NoPm' ? 'Never' : `${c.daysSince}d`}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -222,7 +233,7 @@ export function PmPlannerPage() {
                               {c.pmStatus === 'ComingDue' ? 'Coming Due' : c.pmStatus}
                             </span>
                           </td>
-                          <td className="text-sm text-base-content/60">{c.daysSince}d</td>
+                          <td className="text-sm text-base-content/60">{c.pmStatus === 'NoPm' ? 'Never' : `${c.daysSince}d`}</td>
                         </tr>
                       )
                     })}
