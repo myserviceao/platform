@@ -36,23 +36,42 @@ public class PmPlannerController : ControllerBase
         var tenantId = HttpContext.Session.GetInt32("tenantId");
         if (tenantId == null) return Unauthorized();
 
+        // Get PM customers (overdue + coming due)
         var pmCustomers = await _db.PmCustomers
             .Where(p => p.TenantId == tenantId.Value && (p.PmStatus == "Overdue" || p.PmStatus == "ComingDue"))
             .ToListAsync();
 
         var pmCustomerIds = pmCustomers.Select(p => p.StCustomerId).ToHashSet();
+        var pmMap = pmCustomers.ToDictionary(p => p.StCustomerId);
 
-        var locations = await _db.CustomerLocations
-            .Where(l => l.TenantId == tenantId.Value && l.IsGeocoded && pmCustomerIds.Contains(l.StCustomerId))
+        // Get ALL customers (to find ones with no PM record)
+        var allCustomerIds = await _db.Customers
+            .Where(c => c.TenantId == tenantId.Value)
+            .Select(c => c.StCustomerId)
             .ToListAsync();
 
-        var pmMap = pmCustomers.ToDictionary(p => p.StCustomerId);
+        var allPmCustomerIds = await _db.PmCustomers
+            .Where(p => p.TenantId == tenantId.Value)
+            .Select(p => p.StCustomerId)
+            .ToListAsync();
+
+        var noPmCustomerIds = allCustomerIds.Except(allPmCustomerIds).ToHashSet();
+
+        // Combine: overdue + coming due + no PM
+        var targetCustomerIds = new HashSet<long>(pmCustomerIds);
+        foreach (var id in noPmCustomerIds) targetCustomerIds.Add(id);
+
+        // Get geocoded locations for all target customers
+        var locations = await _db.CustomerLocations
+            .Where(l => l.TenantId == tenantId.Value && l.IsGeocoded && targetCustomerIds.Contains(l.StCustomerId))
+            .ToListAsync();
 
         var points = locations
             .Where(l => l.Latitude.HasValue && l.Longitude.HasValue)
             .Select(l =>
             {
                 pmMap.TryGetValue(l.StCustomerId, out var pm);
+                var isNoPm = noPmCustomerIds.Contains(l.StCustomerId);
                 return new CustomerPoint
                 {
                     StCustomerId = l.StCustomerId,
@@ -61,7 +80,7 @@ public class PmPlannerController : ControllerBase
                     Address = $"{l.Street}, {l.City}, {l.State} {l.Zip}",
                     Lat = l.Latitude!.Value,
                     Lng = l.Longitude!.Value,
-                    PmStatus = pm?.PmStatus ?? "Unknown",
+                    PmStatus = isNoPm ? "NoPm" : (pm?.PmStatus ?? "Unknown"),
                     LastPmDate = pm?.LastPmDate,
                     DaysSince = pm?.LastPmDate.HasValue == true
                         ? (int)(DateTime.UtcNow - pm.LastPmDate.Value).TotalDays
@@ -82,8 +101,11 @@ public class PmPlannerController : ControllerBase
         return Ok(new
         {
             totalCustomers = points.Count,
+            overdueCount = points.Count(p => p.PmStatus == "Overdue"),
+            comingDueCount = points.Count(p => p.PmStatus == "ComingDue"),
+            noPmCount = points.Count(p => p.PmStatus == "NoPm"),
             totalClusters = clusters.Count,
-            notGeocoded = pmCustomers.Count - points.Count,
+            notGeocoded = targetCustomerIds.Count - points.Count,
             radiusMinutes,
             radiusMiles,
             clusters
