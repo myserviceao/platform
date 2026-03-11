@@ -71,7 +71,6 @@ public class ServiceTitanSyncService
                     if (!job.TryGetProperty("customerId", out var custProp)) continue;
                     var customerId = custProp.GetInt64();
 
-                    // completedOn ?? createdOn (same as old app: CompletedAt ?? CreatedAt)
                     DateTime? completedOn = null;
                     if (job.TryGetProperty("completedOn", out var coProp) && coProp.ValueKind == JsonValueKind.String)
                     {
@@ -104,7 +103,32 @@ public class ServiceTitanSyncService
 
             _logger.LogInformation("[Sync] tenantId={TenantId} pmFound={PmFound} uniqueCustomers={Customers}", tenantId, pmFound, pmDates.Count);
 
-            // 4. Upsert PmCustomers
+            // 4. Upsert all Customers
+            foreach (var (stCustomerId, customerName) in customerNameMap)
+            {
+                var existing = await _db.Customers
+                    .FirstOrDefaultAsync(c => c.TenantId == tenantId && c.StCustomerId == stCustomerId);
+
+                if (existing == null)
+                {
+                    _db.Customers.Add(new Customer
+                    {
+                        TenantId = tenantId,
+                        StCustomerId = stCustomerId,
+                        Name = customerName,
+                        UpdatedAt = DateTime.UtcNow
+                    });
+                }
+                else
+                {
+                    existing.Name = customerName;
+                    existing.UpdatedAt = DateTime.UtcNow;
+                }
+            }
+
+            await _db.SaveChangesAsync();
+
+            // 5. Upsert PmCustomers
             foreach (var (stCustomerId, lastPmDate) in pmDates)
             {
                 customerNameMap.TryGetValue(stCustomerId, out var customerName);
@@ -140,7 +164,6 @@ public class ServiceTitanSyncService
 
             await _db.SaveChangesAsync();
 
-            // Update snapshot timestamp
             var snapshot = await _db.DashboardSnapshots.FirstOrDefaultAsync(s => s.TenantId == tenantId);
             if (snapshot == null)
             {
@@ -154,7 +177,7 @@ public class ServiceTitanSyncService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "[Sync] Failed for tenantId={TenantId}", tenantId);
+            _logger.LogError(ey, "[Sync] Failed for tenantId={TenantId}", tenantId);
             return new SyncResult { Success = false, Error = ex.Message };
         }
     }
