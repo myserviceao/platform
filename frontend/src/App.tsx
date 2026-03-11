@@ -12,6 +12,7 @@ import { CustomersPage } from '@/pages/App/Customers/CustomersPage'
 import { CustomerDetailPage } from '@/pages/App/Customers/CustomerDetailPage'
 import { ApPage } from '@/pages/App/Ap/ApPage'
 import { PmOutreachPage } from '@/pages/App/PmOutreach/PmOutreachPage'
+import { PmPlannerPage } from '@/pages/App/PmPlanner/PmPlannerPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const auth = useAuthProvider()
@@ -49,6 +50,7 @@ function AppRoutes() {
                       <Route path="dashboard" element={<DashboardPage />} />
                       <Route path="pm-tracker" element={<PmTrackerPage />} />
                       <Route path="pm-outreach" element={<PmOutreachPage />} />
+                      <Route path="pm-planner" element={<PmPlannerPage />} />
                       <Route path="ap" element={<ApPage />} />
                       <Route path="settings" element={<SettingsPage />} />
                       <Route path="customers" element={<CustomersPage />} />
