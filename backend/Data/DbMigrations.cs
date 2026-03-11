@@ -157,5 +157,24 @@ public static class DbMigrations
             );
         ");
 
+
+        // HoldReasons table
+        await db.Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS ""HoldReasons"" (
+                ""Id"" SERIAL PRIMARY KEY,
+                ""TenantId"" INTEGER NOT NULL REFERENCES ""Tenants""(""Id"") ON DELETE CASCADE,
+                ""StHoldReasonId"" BIGINT NOT NULL,
+                ""Name"" TEXT NOT NULL DEFAULT '',
+                ""Active"" BOOLEAN NOT NULL DEFAULT TRUE,
+                ""UpdatedAt"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                UNIQUE(""TenantId"", ""StHoldReasonId"")
+            );
+        ");
+
+        // Add HoldReasonName to Jobs
+        await db.Database.ExecuteSqlRawAsync(@"
+            ALTER TABLE ""Jobs"" ADD COLUMN IF NOT EXISTS ""HoldReasonName"" TEXT;
+        ");
+
     }
 }
