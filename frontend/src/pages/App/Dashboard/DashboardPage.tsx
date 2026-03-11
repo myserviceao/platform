@@ -28,7 +28,7 @@ interface OverduePm {
 interface ScheduleItem {
   jobNumber: string
   customerName: string
-  start: string  // UTC ISO string
+  start: string
   techs: string[]
 }
 interface DaySchedule {
@@ -89,31 +89,6 @@ function daysSince(createdOn: string | null) {
   return Math.floor((Date.now() - new Date(createdOn).getTime()) / 86400000)
 }
 
-// ── Stat Card ──────────────────────────────────────────────────────────────
-function StatCard({ title, value, sub, color = 'primary', trend }: {
-  title: string; value: string; sub?: string
-  color?: 'primary' | 'success' | 'warning' | 'error'
-  trend?: { pct: string; up: boolean } | null
-}) {
-  const borderColor = { primary: 'border-t-primary', success: 'border-t-success', warning: 'border-t-warning', error: 'border-t-error' }[color]
-  const valColor = color === 'error' ? 'text-error' : color === 'warning' ? 'text-warning' : color === 'success' ? 'text-success' : 'text-base-content'
-  return (
-    <div className={`card bg-base-100 border-t-2 ${borderColor} shadow-sm`}>
-      <div className="card-body p-4 gap-1">
-        <p className="text-xs font-medium text-base-content/50 uppercase tracking-wider">{title}</p>
-        <p className={`text-2xl font-bold ${valColor}`}>{value}</p>
-        {trend && (
-          <p className={`text-xs font-medium ${trend.up ? 'text-success' : 'text-error'}`}>
-            <span className={`icon-[tabler--trending-${trend.up ? 'up' : 'down'}] size-3 inline me-0.5`} />
-            {trend.pct}% vs last month
-          </p>
-        )}
-        {!trend && sub && <p className="text-xs text-base-content/40">{sub}</p>}
-      </div>
-    </div>
-  )
-}
-
 // ── Main ───────────────────────────────────────────────────────────────────
 export function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
@@ -164,6 +139,43 @@ export function DashboardPage() {
     schedTab === 'tomorrow' ? (d?.scheduledTomorrow ?? null) :
                               (d?.scheduledDayAfter ?? null)
 
+  // Stat items for the unified card
+  const stats = [
+    {
+      icon: 'icon-[tabler--currency-dollar]',
+      iconBg: arTotal > 0 ? 'bg-warning/10' : 'bg-success/10',
+      iconColor: arTotal > 0 ? 'text-warning' : 'text-success',
+      label: 'Total AR',
+      value: fmt(arTotal),
+      sub: arTotal > 0 ? `${d?.aRbyCustomer?.length ?? 0} customers` : 'All paid up',
+    },
+    {
+      icon: 'icon-[tabler--chart-line]',
+      iconBg: 'bg-success/10',
+      iconColor: 'text-success',
+      label: 'Month Revenue',
+      value: fmt(d?.revenueThisMonth ?? 0),
+      sub: change ? `${change.up ? '↑' : '↓'} ${change.pct}% vs last month` : `Last: ${fmt(d?.revenueLastMonth ?? 0)}`,
+      subColor: change ? (change.up ? 'text-success' : 'text-error') : undefined,
+    },
+    {
+      icon: 'icon-[tabler--clipboard-list]',
+      iconBg: 'bg-primary/10',
+      iconColor: 'text-primary',
+      label: 'Open Work Orders',
+      value: (d?.openWoCount ?? 0).toString(),
+      sub: d?.oldestWoDays ? `oldest ${d.oldestWoDays}d` : 'None open',
+    },
+    {
+      icon: 'icon-[tabler--alert-triangle]',
+      iconBg: (d?.overduePmCount ?? 0) > 0 ? 'bg-error/10' : 'bg-success/10',
+      iconColor: (d?.overduePmCount ?? 0) > 0 ? 'text-error' : 'text-success',
+      label: 'Overdue PMs',
+      value: (d?.overduePmCount ?? 0).toString(),
+      sub: (d?.overduePmCount ?? 0) > 0 ? `${d!.overduePmCount} past due` : 'All current',
+    },
+  ]
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -202,33 +214,24 @@ export function DashboardPage() {
         </div>
       )}
 
-      {/* Top stat cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard
-          title="Total AR"
-          value={fmt(arTotal)}
-          sub={arTotal > 0 ? `${d?.aRbyCustomer?.length ?? 0} customers` : 'All paid up'}
-          color={arTotal > 0 ? 'warning' : 'success'}
-        />
-        <StatCard
-          title="Month Revenue"
-          value={fmt(d?.revenueThisMonth ?? 0)}
-          trend={change}
-          sub={`Last month: ${fmt(d?.revenueLastMonth ?? 0)}`}
-          color="success"
-        />
-        <StatCard
-          title="Open Work Orders"
-          value={(d?.openWoCount ?? 0).toString()}
-          sub={d?.oldestWoDays ? `oldest ${d.oldestWoDays}d open` : 'Active / Scheduled / Hold'}
-          color="primary"
-        />
-        <StatCard
-          title="Overdue PMs"
-          value={(d?.overduePmCount ?? 0).toString()}
-          sub={(d?.overduePmCount ?? 0) > 0 ? `${d!.overduePmCount} customers past due` : 'All current'}
-          color={(d?.overduePmCount ?? 0) > 0 ? 'error' : 'success'}
-        />
+      {/* ── Combined Stat Card ── */}
+      <div className="card bg-base-100 shadow-sm">
+        <div className="card-body p-0">
+          <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-base-content/10">
+            {stats.map((s, i) => (
+              <div key={i} className="flex items-center gap-3 px-5 py-4">
+                <div className={`flex items-center justify-center size-10 rounded-lg ${s.iconBg} shrink-0`}>
+                  <span className={`${s.icon} size-5 ${s.iconColor}`} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-base-content/50 truncate">{s.label}</p>
+                  <p className="text-xl font-bold text-base-content leading-tight">{s.value}</p>
+                  <p className={`text-xs ${s.subColor ?? 'text-base-content/40'} truncate`}>{s.sub}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Schedule Strip */}
