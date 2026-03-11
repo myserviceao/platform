@@ -20,6 +20,6 @@ export default {
     require('flyonui/plugin'),
   ],
   flyonui: {
-    themes: ['dark', 'light', 'corporate'],
+    themes: ['dark', 'light', 'corporate', 'gourmet', 'luxury', 'soft', 'sunset', 'forest', 'synthwave', 'dracula', 'night', 'dim'],
   },
 } satisfies Config
