@@ -2,6 +2,7 @@
 @plugin "flyonui" {
   themes: light --default, dark --prefersdark, corporate, gourmet, luxury, soft, shadcn, slack, spotify, vscode, claude, pastel, valorant, ghibli, mintlify, perplexity, black;
 }
+@plugin "@iconify/tailwind4";
 @import "flyonui/variants.css";
 
 @theme {
