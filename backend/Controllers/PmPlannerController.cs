@@ -203,7 +203,7 @@ public class PmPlannerController : ControllerBase
             });
         }
 
-        return clusters.OrderByDescending(c => ((dynamic)c).count).ToList();
+        return clusters;
     }
 
     private static double HaversineDistance(double lat1, double lon1, double lat2, double lon2)
