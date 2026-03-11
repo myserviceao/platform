@@ -228,7 +228,7 @@ export function ApPage() {
               {displayed.map(b => {
                 const days = daysUntil(b.dueDate)
                 return (
-                  <tr key={b.id} className="hover">
+                  <tr key={b.id} className="row-hover">
                     <td className="font-medium text-base-content">{b.vendorName}</td>
                     <td className="text-base-content/60">{b.invoiceNumber || '—'}</td>
                     <td className="text-right font-medium">{fmt(b.amount)}</td>
