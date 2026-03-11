@@ -840,4 +840,75 @@ public class SyncResult
     public bool Success { get; set; }
     public DateTime? SyncedAt { get; set; }
     public string? Error { get; set; }
-}            // 4c. Resolve hold reasons from appointment export
+}            // 4c. Resolve hold reasons using the jobs LIST endpoint (not export)
+            // The list endpoint (GET /jobs) returns holdReasonId, the export doesn't
+            var unresolvedHoldJobs = await _db.Jobs
+                .Where(j => j.TenantId == tenantId && j.Status == "Hold" && j.HoldReasonName == null)
+                .ToListAsync();
+
+            if (unresolvedHoldJobs.Count > 0 && holdReasonIdMap.Count > 0)
+            {
+                _logger.LogInformation("[Sync] Resolving {Count} hold reasons via jobs list endpoint", unresolvedHoldJobs.Count);
+                int resolved = 0;
+
+                // Query hold jobs from the list endpoint (returns holdReasonId)
+                int listPage = 1;
+                bool listHasMore = true;
+                var holdReasonsByJobId = new Dictionary<long, long>();
+
+                while (listHasMore)
+                {
+                    try
+                    {
+                        var listRaw = await _client.GetJobsByStatusAsync(token, stTenantId, "Hold", listPage);
+                        var listDoc = JsonDocument.Parse(listRaw);
+                        var listRoot = listDoc.RootElement;
+
+                        listHasMore = listRoot.TryGetProperty("hasMore", out var lhm) && lhm.GetBoolean();
+
+                        if (listRoot.TryGetProperty("data", out var listData))
+                        {
+                            foreach (var lj in listData.EnumerateArray())
+                            {
+                                var ljId = lj.GetProperty("id").GetInt64();
+                                if (lj.TryGetProperty("holdReasonId", out var ljHr) && ljHr.ValueKind == JsonValueKind.Number)
+                                {
+                                    holdReasonsByJobId[ljId] = ljHr.GetInt64();
+                                }
+                            }
+                        }
+                        else
+                        {
+                            break;
+                        }
+
+                        listPage++;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "[Sync] Failed to query hold jobs list page {Page}", listPage);
+                        break;
+                    }
+                }
+
+                _logger.LogInformation("[Sync] Found {Count} hold reasons from list endpoint", holdReasonsByJobId.Count);
+
+                foreach (var hj in unresolvedHoldJobs)
+                {
+                    if (holdReasonsByJobId.TryGetValue(hj.StJobId, out var hrId))
+                    {
+                        if (holdReasonIdMap.TryGetValue(hrId, out var reasonName))
+                        {
+                            hj.HoldReasonName = reasonName;
+                            resolved++;
+                            _logger.LogInformation("[Sync] Job #{JobNum}: {Reason}", hj.JobNumber, reasonName);
+                        }
+                    }
+                }
+
+                if (resolved > 0)
+                    await _db.SaveChangesAsync();
+
+                _logger.LogInformation("[Sync] Resolved {Resolved}/{Total} hold reasons", resolved, unresolvedHoldJobs.Count);
+            }
+
