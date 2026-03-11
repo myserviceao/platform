@@ -695,6 +695,16 @@ public class ServiceTitanSyncService
 
 
 
+
+    public async Task<string> GetRawApptExportAsync(int tenantId)
+    {
+        var token = await _oauth.GetValidTokenAsync(tenantId);
+        if (token == null) return "{}";
+        var tenant = await _db.Tenants.FindAsync(tenantId);
+        if (tenant == null) return "{}";
+        return await _client.GetAppointmentsExportAsync(token, tenant.StTenantId);
+    }
+
     public async Task<string> GetHoldJobsRawAsync(int tenantId)
     {
         var token = await _oauth.GetValidTokenAsync(tenantId);
