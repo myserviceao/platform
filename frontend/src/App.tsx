@@ -8,6 +8,8 @@ import { PmTrackerPage } from '@/pages/App/PmTracker/PmTrackerPage'
 import { SettingsPage } from '@/pages/App/Settings/SettingsPage'
 import { AppShell } from '@/components/layout/AppShell'
 import ServiceTitanPage from '@/pages/App/ServiceTitanPage'
+import { CustomersPage } from '@/pages/App/Customers/CustomersPage'
+import { CustomerDetailPage } from '@/pages/App/Customers/CustomerDetailPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const auth = useAuthProvider()
@@ -47,6 +49,8 @@ function AppRoutes() {
                       <Route path="dashboard" element={<DashboardPage />} />
                       <Route path="pm-tracker" element={<PmTrackerPage />} />
                       <Route path="settings" element={<SettingsPage />} />
+                      <Route path="customers" element={<CustomersPage />} />
+                      <Route path="customers/:id" element={<CustomerDetailPage />} />
                       <Route path="servicetitan" element={<ServiceTitanPage />} />
                       <Route path="*" element={
                         <div className="flex items-center justify-center h-64 text-base-content/40 text-sm">
