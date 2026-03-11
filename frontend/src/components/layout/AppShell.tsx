@@ -28,7 +28,7 @@ const navItems: NavEntry[] = [
     path: '/app/dashboard',
   },
   {
-    label: 'Maintenance',
+    label: 'PMs/Maintenances',
     icon: 'icon-[tabler--tool]',
     children: [
       {
@@ -300,7 +300,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       type="button"
                       className="accordion-toggle accordion-item-active:bg-base-content/5 inline-flex w-full items-center gap-2 rounded-lg p-2 text-sm font-medium text-base-content/80 hover:bg-base-content/5"
                       aria-controls={`nav-collapse-${idx}`}
-                      aria-expanded={groupActive}
+                      aria-expanded={groupActive || false}
                     >
                       <span className={`${entry.icon} size-4.5`} />
                       <span className="flex-1 text-left">{entry.label}</span>
