@@ -250,4 +250,15 @@ public class DashboardController : ControllerBase
         var raw = await _sync.GetJobHistoryRawAsync(tenantId.Value, stJobId);
         return Content(raw, "application/json");
     }
+
+    [HttpGet("job-detail/{stJobId}")]
+    public async Task<IActionResult> GetJobDetail(long stJobId)
+    {
+        var tenantId = HttpContext.Session.GetInt32("tenantId");
+        if (tenantId == null) return Unauthorized();
+        var raw = await _sync.GetJobRawAsync(tenantId.Value, stJobId);
+        return Content(raw, "application/json");
+    }
+
+
 }
