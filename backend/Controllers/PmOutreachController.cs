@@ -46,6 +46,7 @@ public class PmOutreachController : ControllerBase
             .ToListAsync();
 
         var results = new List<object>();
+        int overdueCount = 0, comingDueCount = 0, noPmCount = 0;
 
         // Overdue and Coming Due from PmCustomers
         foreach (var pm in pmCustomers.Where(p => p.PmStatus == "Overdue" || p.PmStatus == "ComingDue"))
@@ -54,6 +55,9 @@ public class PmOutreachController : ControllerBase
             var daysSince = pm.LastPmDate.HasValue
                 ? (int)(DateTime.UtcNow - pm.LastPmDate.Value).TotalDays
                 : 0;
+
+            if (pm.PmStatus == "Overdue") overdueCount++;
+            else if (pm.PmStatus == "ComingDue") comingDueCount++;
 
             results.Add(new
             {
@@ -70,6 +74,7 @@ public class PmOutreachController : ControllerBase
         }
 
         // No PM customers
+        noPmCount = noPmCustomers.Count;
         foreach (var cust in noPmCustomers)
         {
             results.Add(new
@@ -89,9 +94,9 @@ public class PmOutreachController : ControllerBase
         return Ok(new
         {
             companyName,
-            overdueCount = results.Count(r => ((dynamic)r).pmStatus == "Overdue"),
-            comingDueCount = results.Count(r => ((dynamic)r).pmStatus == "ComingDue"),
-            noPmCount = results.Count(r => ((dynamic)r).pmStatus == "NoPm"),
+            overdueCount,
+            comingDueCount,
+            noPmCount,
             customers = results
         });
     }
