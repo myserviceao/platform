@@ -235,16 +235,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Profile header */}
         <div className="flex flex-col items-center gap-3 border-b border-base-content/10 px-4 py-6 text-center">
-          <div className="avatar placeholder">
-            <div className="bg-primary text-primary-content rounded-full w-16">
-              <span className="text-xl font-semibold">{initials}</span>
+          {user?.tenant?.logoUrl ? (
+            <img
+              src={user.tenant.logoUrl}
+              alt={user.tenant.name}
+              className="w-16 h-16 rounded-full object-cover"
+            />
+          ) : (
+            <div className="avatar placeholder">
+              <div className="bg-primary text-primary-content rounded-full w-16">
+                <span className="text-xl font-semibold">{initials}</span>
+              </div>
             </div>
-          </div>
+          )}
           <div>
             <h3 className="text-base-content font-semibold">
               {user?.firstName} {user?.lastName}
             </h3>
-            <p className="text-base-content/60 text-sm capitalize">{user?.role}</p>
+            <p className="text-base-content/60 text-sm capitalize">{user?.title || user?.role}</p>
             <p className="text-base-content/40 text-xs truncate max-w-[180px]">{user?.tenant?.name}</p>
           </div>
         </div>
