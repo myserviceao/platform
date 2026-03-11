@@ -102,12 +102,7 @@ const navItems: NavEntry[] = [
   },
 ]
 
-// Legacy THEMES removed, using THEME_OPTIONS
-const _LEGACY_THEMES: { value: Theme; label: string; icon: string }[] = [
-  { value: 'dark', label: 'Dark', icon: 'icon-[tabler--moon]' },
-  { value: 'light', label: 'Light', icon: 'icon-[tabler--sun]' },
-  { value: 'corporate', label: 'Corporate', icon: 'icon-[tabler--building]' },
-]
+
 
 interface SearchResult {
   type: 'customer' | 'job' | 'page'
@@ -438,23 +433,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <GlobalSearch />
           </div>
           <div className="navbar-end gap-2 lg:w-auto lg:flex-none">
-            <div className="dropdown dropdown-end">
-              <button tabIndex={0} className="btn btn-ghost btn-square btn-sm" aria-label="Switch theme">
-                <span className={`size-5 ${THEMES.find(t => t.value === theme)?.icon ?? 'icon-[tabler--moon]'}`} />
-              </button>
-              <ul tabIndex={0} className="dropdown-menu dropdown-open:opacity-100 hidden w-40 space-y-0.5 p-2">
-                {THEMES.map((t) => (
-                  <li key={t.value}>
-                    <button className={`dropdown-item flex items-center gap-2 w-full ${theme === t.value ? 'dropdown-active' : ''}`} onClick={() => setTheme(t.value)}>
-                      <span className={`${t.icon} size-4`} />
-                      {t.label}
-                      {theme === t.value && <span className="icon-[tabler--check] size-4 ms-auto text-primary" />}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="avatar avatar-placeholder">
+                        <div className="avatar avatar-placeholder">
               <div className="bg-primary text-primary-content rounded-full w-8">
                 <span className="text-xs font-semibold">{initials}</span>
               </div>
