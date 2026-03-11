@@ -1,6 +1,6 @@
 import { useState, useEffect, createContext, useContext, useCallback } from 'react'
 
-export type Theme = 'dark' | 'light' | 'corporate'
+export type Theme = 'dark' | 'light' | 'corporate' | 'gourmet' | 'luxury' | 'soft' | 'sunset' | 'forest' | 'synthwave' | 'dracula' | 'night' | 'dim'
 
 interface ThemeContextType {
   theme: Theme
@@ -17,11 +17,9 @@ export function useTheme() {
 
 export function useThemeProvider(initialTheme: Theme | null): ThemeContextType {
   const [theme, setThemeState] = useState<Theme>(() => {
-    // Use saved theme from DB (passed via auth), fallback to dark
     return (initialTheme as Theme) || 'dark'
   })
 
-  // Apply theme to <html> element whenever it changes
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
   }, [theme])
@@ -29,7 +27,6 @@ export function useThemeProvider(initialTheme: Theme | null): ThemeContextType {
   const setTheme = useCallback(async (newTheme: Theme) => {
     setThemeState(newTheme)
     document.documentElement.setAttribute('data-theme', newTheme)
-    // Save to DB
     await fetch('/api/settings/theme', {
       method: 'PUT',
       credentials: 'include',
