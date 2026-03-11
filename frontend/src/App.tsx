@@ -10,6 +10,7 @@ import { AppShell } from '@/components/layout/AppShell'
 import ServiceTitanPage from '@/pages/App/ServiceTitanPage'
 import { CustomersPage } from '@/pages/App/Customers/CustomersPage'
 import { CustomerDetailPage } from '@/pages/App/Customers/CustomerDetailPage'
+import { ApPage } from '@/pages/App/Ap/ApPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const auth = useAuthProvider()
@@ -33,12 +34,10 @@ function AppRoutes() {
       <ThemeContext.Provider value={themeProvider}>
         <BrowserRouter>
           <Routes>
-            {/* Public */}
             <Route path="/" element={<Navigate to="/app/login" replace />} />
             <Route path="/app/login" element={<LoginPage />} />
             <Route path="/app/register" element={<RegisterPage />} />
 
-            {/* Protected app routes */}
             <Route
               path="/app/*"
               element={
@@ -48,6 +47,7 @@ function AppRoutes() {
                       <Route index element={<Navigate to="/app/dashboard" replace />} />
                       <Route path="dashboard" element={<DashboardPage />} />
                       <Route path="pm-tracker" element={<PmTrackerPage />} />
+                      <Route path="ap" element={<ApPage />} />
                       <Route path="settings" element={<SettingsPage />} />
                       <Route path="customers" element={<CustomersPage />} />
                       <Route path="customers/:id" element={<CustomerDetailPage />} />
