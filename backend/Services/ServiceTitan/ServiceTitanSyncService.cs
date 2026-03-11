@@ -675,8 +675,6 @@ public class ServiceTitanSyncService
             return new SyncResult { Success = false, Error = ex.Message };
         }
     }
-}
-
 
     public async Task<string> GetJobHistoryRawAsync(int tenantId, long stJobId)
     {
@@ -685,6 +683,10 @@ public class ServiceTitanSyncService
         var token = await _oauth.GetAccessTokenAsync(tenant.StClientId, tenant.StClientSecret);
         return await _client.GetJobHistoryAsync(token, tenant.StTenantId, stJobId);
     }
+}
+
+
+
 
 public class SyncResult
 {
