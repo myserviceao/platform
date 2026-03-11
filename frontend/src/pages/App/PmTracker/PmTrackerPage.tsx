@@ -162,7 +162,7 @@ export function PmTrackerPage() {
                     ? 'badge-warning'
                     : 'badge-success'
                 return (
-                  <tr key={c.stCustomerId} className="hover">
+                  <tr key={c.stCustomerId} className="row-hover">
                     <td className="font-medium text-base-content">{c.customerName}</td>
                     <td className="text-base-content/70">{formatDate(c.lastPmDate)}</td>
                     <td className="text-base-content/60">
