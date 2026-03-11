@@ -11,6 +11,7 @@ public class AppDbContext : DbContext
     public DbSet<User> Users => Set<User>();
     public DbSet<DashboardSnapshot> DashboardSnapshots => Set<DashboardSnapshot>();
     public DbSet<PmCustomer> PmCustomers => Set<PmCustomer>();
+    public DbSet<Customer> Customers => Set<Customer>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -42,6 +43,16 @@ public class AppDbContext : DbContext
             e.HasOne(d => d.Tenant)
              .WithMany()
              .HasForeignKey(d => d.TenantId);
+        });
+
+        // Customer - one row per (tenant, ST customer)
+        modelBuilder.Entity<Customer>(e =>
+        {
+            e.HasKey(c => c.Id);
+            e.HasIndex(c => new { c.TenantId, c.StCustomerId }).IsUnique();
+            e.HasOne(c => c.Tenant)
+             .WithMany()
+             .HasForeignKey(c => c.TenantId);
         });
 
         // PmCustomer - one row per (tenant, ST customer)
