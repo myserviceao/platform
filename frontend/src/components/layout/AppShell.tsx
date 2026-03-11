@@ -15,6 +15,11 @@ const navItems = [
     path: '/app/pm-tracker',
   },
   {
+    label: 'PM Outreach',
+    icon: 'icon-[tabler--send]',
+    path: '/app/pm-outreach',
+  },
+  {
     label: 'Work Orders',
     icon: 'icon-[tabler--clipboard-list]',
     path: '/app/work-orders',
