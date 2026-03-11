@@ -52,7 +52,7 @@ export function CustomerDetailPage() {
   const [activeTab, setActiveTab] = useState<'overview' | 'invoices' | 'work-orders' | 'equipment'>('overview')
 
   const fetchProfile = useCallback(async () => {
-    const res = await fetch(`/api/customers/${id}`, { credentials: 'include' })
+    const res = await fetch(`/customers/${id}`, { credentials: 'include' })
     if (res.ok) setProfile(await res.json())
     else setError('Failed to load customer profile')
   }, [id])

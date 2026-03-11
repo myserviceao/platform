@@ -25,7 +25,7 @@ export function CustomersPage() {
   const navigate = useNavigate()
 
   const fetchCustomers = useCallback(async () => {
-    const res = await fetch('/api/customers', { credentials: 'include' })
+    const res = await fetch('/customers', { credentials: 'include' })
     if (res.ok) setCustomers(await res.json())
     else setError('Failed to load customers')
   }, [])
