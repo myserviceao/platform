@@ -1,33 +1,50 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 
+interface JobRow {
+  jobNumber: string
+  jobTypeName: string | null
+  status: string
+  createdOn: string | null
+  totalAmount: number
+}
+
+interface InvoiceRow {
+  stInvoiceId: number
+  invoiceDate: string
+  totalAmount: number
+  balanceRemaining: number
+}
+
 interface CustomerDetail {
   id: string
   name: string
   serviceTitanCustomerId: number
-  lastPmDate?: string
+  totalBalance: number
+  openWoCount: number
+  jobCount: number
+  lastPmDate: string | null
   pmStatus: string
-  updatedAt: string
+  jobs: JobRow[]
+  invoices: InvoiceRow[]
 }
 
-function fmt(date?: string | null) {
+function fmt(n: number) {
+  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 })
+}
+
+function fmtDate(date?: string | null) {
   if (!date) return '—'
   return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-function daysAgo(date?: string | null) {
-  if (!date) return null
-  return Math.floor((Date.now() - new Date(date).getTime()) / (1000 * 60 * 60 * 24))
+function invoiceStatus(balance: number, total: number) {
+  if (balance <= 0) return { label: 'Paid', cls: 'badge-success' }
+  if (balance < total) return { label: 'Partial', cls: 'badge-warning' }
+  return { label: 'Open', cls: 'badge-error' }
 }
 
-function pmBadgeClass(status: string) {
-  switch (status) {
-    case 'Overdue': return 'badge-error'
-    case 'ComingDue': return 'badge-warning'
-    case 'NoPm': return 'badge-ghost'
-    default: return 'badge-success'
-  }
-}
+type Tab = 'workorders' | 'invoices' | 'equipment'
 
 export function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -35,6 +52,7 @@ export function CustomerDetailPage() {
   const [customer, setCustomer] = useState<CustomerDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [tab, setTab] = useState<Tab>('workorders')
 
   const fetchCustomer = useCallback(async () => {
     const res = await fetch(`/api/customers/${id}`, { credentials: 'include' })
@@ -46,25 +64,44 @@ export function CustomerDetailPage() {
     fetchCustomer().finally(() => setLoading(false))
   }, [fetchCustomer])
 
-  if (loading) return (<div className="flex items-center justify-center py-20"><span className="loading loading-spinner loading-md text-primary" /></div>)
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <span className="loading loading-spinner loading-md text-primary" />
+      </div>
+    )
+  }
 
-  if (error || !customer) return (
-    <div className="max-w-4xl mx-auto py-8">
-      <div className="alert alert-soft alert-error">{error || 'Customer not found'}</div>
-      <button onClick={() => navigate('/app/customers')} className="btn btn-ghost btn-sm mt-4">
-        <span className="icon-[tabler--arrow-left] size-4" /> Back to Customers
-      </button>
-    </div>
-  )
+  if (error || !customer) {
+    return (
+      <div className="max-w-5xl mx-auto py-8">
+        <div className="alert alert-soft alert-error">{error || 'Customer not found'}</div>
+        <button onClick={() => navigate('/app/customers')} className="btn btn-ghost btn-sm mt-4">
+          <span className="icon-[tabler--arrow-left] size-4" /> Back to Customers
+        </button>
+      </div>
+    )
+  }
 
-  const pmDays = daysAgo(customer.lastPmDate)
+  const tabs: { key: Tab; label: string; count?: number }[] = [
+    { key: 'workorders', label: 'Work Orders', count: customer.jobs.length },
+    { key: 'invoices', label: 'Invoices', count: customer.invoices.length },
+    { key: 'equipment', label: 'Equipment' },
+  ]
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 py-2">
+    <div className="max-w-5xl mx-auto space-y-6 py-2">
+
+      {/* Back + Header */}
       <div>
-        <button onClick={() => navigate('/app/customers')} className="btn btn-ghost btn-xs text-base-content/50 hover:text-base-content mb-3 -ml-2">
-          <span className="icon-[tabler--arrow-left] size-3.5" /> Customers
+        <button
+          onClick={() => navigate('/app/customers')}
+          className="btn btn-ghost btn-xs text-base-content/50 hover:text-base-content mb-3 -ml-2"
+        >
+          <span className="icon-[tabler--arrow-left] size-3.5" />
+          Customers
         </button>
+
         <div className="flex items-center gap-4">
           <div className="avatar avatar-placeholder">
             <div className="bg-primary/20 text-primary rounded-full size-14 text-xl font-bold">
@@ -73,31 +110,161 @@ export function CustomerDetailPage() {
           </div>
           <div>
             <h1 className="text-2xl font-semibold text-base-content">{customer.name}</h1>
-            <div className="text-sm text-base-content/50 mt-0.5">ServiceTitan #{customer.serviceTitanCustomerId}</div>
-          </div>
-        </div>
-      </div>
-
-      <div className="rounded-box border border-base-content/10 bg-base-100 p-5">
-        <h3 className="text-sm font-semibold text-base-content/60 uppercase tracking-wide mb-4">PM Status</h3>
-        <div className="flex items-center justify-between">
-          <div className="space-y-1">
-            <div className="text-sm text-base-content/60">Last Preventive Maintenance</div>
-            <div className="text-xl font-semibold text-base-content">
-              {customer.lastPmDate ? fmt(customer.lastPmDate) : 'None on file'}
+            <div className="text-sm text-base-content/50 mt-0.5">
+              ServiceTitan #{customer.serviceTitanCustomerId}
             </div>
-            {pmDays !== null && <div className="text-sm text-base-content/50">{pmDays} days ago</div>}
           </div>
-          <span className={`badge badge-soft badge-lg ${pmBadgeClass(customer.pmStatus)}`}>
-            {customer.pmStatus === 'ComingDue' ? 'Coming Due' : customer.pmStatus === 'NoPm' ? 'No PM on Record' : customer.pmStatus}
-          </span>
         </div>
       </div>
 
-      <div className="rounded-box border border-base-content/10 bg-base-100 p-8 text-center">
-        <span className="icon-[tabler--building] size-10 text-base-content/20 mb-3 mx-auto block" />
-        <div className="text-sm text-base-content/40">Invoices, work orders, and equipment will be available once AR sync is added.</div>
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="rounded-box border border-base-content/10 bg-base-100 p-4">
+          <div className="text-xs text-base-content/50 mb-1">Balance Owed</div>
+          <div className={`text-xl font-bold ${customer.totalBalance > 0 ? 'text-warning' : 'text-base-content'}`}>
+            {fmt(customer.totalBalance)}
+          </div>
+        </div>
+        <div className="rounded-box border border-base-content/10 bg-base-100 p-4">
+          <div className="text-xs text-base-content/50 mb-1">Work Orders</div>
+          <div className="text-xl font-bold text-base-content">{customer.jobCount}</div>
+        </div>
+        <div className="rounded-box border border-base-content/10 bg-base-100 p-4">
+          <div className="text-xs text-base-content/50 mb-1">Open WOs</div>
+          <div className={`text-xl font-bold ${customer.openWoCount > 0 ? 'text-primary' : 'text-base-content'}`}>
+            {customer.openWoCount}
+          </div>
+        </div>
+        <div className="rounded-box border border-base-content/10 bg-base-100 p-4">
+          <div className="text-xs text-base-content/50 mb-1">Last PM</div>
+          <div className="text-lg font-semibold text-base-content">
+            {customer.lastPmDate ? fmtDate(customer.lastPmDate) : '—'}
+          </div>
+          {customer.pmStatus && customer.pmStatus !== 'NoPm' && (
+            <span className={`badge badge-soft badge-xs mt-1 ${
+              customer.pmStatus === 'Overdue' ? 'badge-error' :
+              customer.pmStatus === 'ComingDue' ? 'badge-warning' : 'badge-success'
+            }`}>
+              {customer.pmStatus === 'ComingDue' ? 'Coming Due' : customer.pmStatus}
+            </span>
+          )}
+        </div>
       </div>
+
+      {/* Tabs */}
+      <div className="tabs tabs-bordered">
+        {tabs.map(t => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`tab ${tab === t.key ? 'tab-active' : ''}`}
+          >
+            {t.label}
+            {t.count !== undefined && (
+              <span className="badge badge-soft badge-sm ms-2">{t.count}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab Content */}
+      {tab === 'workorders' && (
+        customer.jobs.length === 0 ? (
+          <div className="text-center py-16 text-base-content/40 text-sm">
+            No work orders found for this customer.
+          </div>
+        ) : (
+          <div className="rounded-box border border-base-content/10 overflow-hidden">
+            <table className="table table-sm">
+              <thead>
+                <tr>
+                  <th>Job #</th>
+                  <th>Type</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                  <th className="text-right">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {customer.jobs.map((j, i) => (
+                  <tr key={i} className="hover">
+                    <td className="font-medium text-base-content">{j.jobNumber || '—'}</td>
+                    <td className="text-base-content/70">{j.jobTypeName || '—'}</td>
+                    <td>
+                      <span className={`badge badge-soft badge-xs ${
+                        j.status === 'Completed' ? 'badge-success' :
+                        j.status === 'InProgress' ? 'badge-primary' :
+                        j.status === 'Scheduled' ? 'badge-info' :
+                        j.status === 'Hold' ? 'badge-warning' :
+                        j.status === 'Canceled' ? 'badge-ghost' : 'badge-ghost'
+                      }`}>
+                        {j.status || 'Unknown'}
+                      </span>
+                    </td>
+                    <td className="text-base-content/60">{fmtDate(j.createdOn)}</td>
+                    <td className="text-right font-medium text-base-content">
+                      {j.totalAmount > 0 ? fmt(j.totalAmount) : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      )}
+
+      {tab === 'invoices' && (
+        customer.invoices.length === 0 ? (
+          <div className="text-center py-16 text-base-content/40 text-sm">
+            No invoices found for this customer.
+          </div>
+        ) : (
+          <div className="rounded-box border border-base-content/10 overflow-hidden">
+            <table className="table table-sm">
+              <thead>
+                <tr>
+                  <th>Invoice #</th>
+                  <th>Issue Date</th>
+                  <th className="text-right">Total</th>
+                  <th className="text-right">Balance</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {customer.invoices.map((inv, i) => {
+                  const s = invoiceStatus(inv.balanceRemaining, inv.totalAmount)
+                  return (
+                    <tr key={i} className="hover">
+                      <td className="font-medium text-base-content">#{inv.stInvoiceId}</td>
+                      <td className="text-base-content/60">{fmtDate(inv.invoiceDate)}</td>
+                      <td className="text-right text-base-content">{fmt(inv.totalAmount)}</td>
+                      <td className="text-right">
+                        {inv.balanceRemaining > 0 ? (
+                          <span className="font-medium text-warning">{fmt(inv.balanceRemaining)}</span>
+                        ) : (
+                          <span className="text-success">$0.00</span>
+                        )}
+                      </td>
+                      <td>
+                        <span className={`badge badge-soft badge-xs ${s.cls}`}>{s.label}</span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )
+      )}
+
+      {tab === 'equipment' && (
+        <div className="rounded-box border border-base-content/10 bg-base-100 p-8 text-center">
+          <span className="icon-[tabler--tool] size-10 text-base-content/20 mb-3 mx-auto block" />
+          <div className="text-sm text-base-content/40">
+            Equipment tracking coming soon. This will sync installed equipment from ServiceTitan.
+          </div>
+        </div>
+      )}
     </div>
   )
 }
