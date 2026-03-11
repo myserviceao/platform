@@ -16,7 +16,6 @@ public class AuthController : ControllerBase
         _auth = auth;
     }
 
-    // POST /api/auth/login
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest req)
     {
@@ -34,6 +33,7 @@ public class AuthController : ControllerBase
             user.FirstName,
             user.LastName,
             user.Role,
+            user.Title,
             Tenant = new
             {
                 user.Tenant.Id,
@@ -45,7 +45,6 @@ public class AuthController : ControllerBase
         });
     }
 
-    // POST /api/auth/register
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest req)
     {
@@ -64,6 +63,7 @@ public class AuthController : ControllerBase
                 user.FirstName,
                 user.LastName,
                 user.Role,
+                user.Title,
                 Tenant = new
                 {
                     user.Tenant.Id,
@@ -80,7 +80,6 @@ public class AuthController : ControllerBase
         }
     }
 
-    // POST /api/auth/logout
     [HttpPost("logout")]
     public IActionResult Logout()
     {
@@ -88,7 +87,6 @@ public class AuthController : ControllerBase
         return Ok(new { message = "Logged out." });
     }
 
-    // GET /api/auth/me
     [HttpGet("me")]
     public async Task<IActionResult> Me()
     {
@@ -107,6 +105,7 @@ public class AuthController : ControllerBase
             user.FirstName,
             user.LastName,
             user.Role,
+            user.Title,
             Tenant = new
             {
                 user.Tenant.Id,
