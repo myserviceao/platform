@@ -8,14 +8,16 @@ interface WoJob {
   status: string
   jobTypeName: string | null
   totalAmount: number
+  holdReasonName: string | null
   createdOn: string | null
   daysSince: number
 }
 
 interface WoColumn {
-  status: string
+  key: string
   label: string
   color: string
+  isHold: boolean
   count: number
   jobs: WoJob[]
 }
@@ -23,6 +25,7 @@ interface WoColumn {
 interface BoardData {
   totalJobs: number
   totalAmount: number
+  holdReasonCount: number
   columns: WoColumn[]
 }
 
@@ -85,7 +88,7 @@ export function WoBoardPage() {
       </div>
 
       {/* Kanban columns */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 items-start">
+      <div className="flex gap-4 overflow-x-auto pb-2 items-start">
         {data.columns.map(col => {
           const colors = colorMap(col.color)
           const filteredJobs = q
@@ -93,7 +96,7 @@ export function WoBoardPage() {
             : col.jobs
 
           return (
-            <div key={col.status} className={`rounded-box border border-base-content/10 bg-base-100 border-t-[3px] ${colors.border} flex flex-col`}>
+            <div key={col.key} className={`rounded-box border border-base-content/10 bg-base-100 border-t-[3px] ${colors.border} flex flex-col min-w-[280px] w-[280px] xl:flex-1 xl:w-auto xl:min-w-0 shrink-0`}>
               {/* Column header */}
               <div className="flex items-center justify-between px-4 py-3 border-b border-base-content/10">
                 <div className="flex items-center gap-2">
