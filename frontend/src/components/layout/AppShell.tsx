@@ -229,6 +229,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const location = useLocation()
   const navigate = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [openMenus, setOpenMenus] = useState<Record<number, boolean>>({})
+
+  const toggleMenu = (idx: number) => {
+    setOpenMenus(prev => ({ ...prev, [idx]: !prev[idx] }))
+  }
 
   const handleLogout = async () => {
     await logout()
@@ -289,29 +294,28 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto p-3">
-          <ul className="accordion menu menu-sm gap-0.5 p-0" data-accordion>
+          <ul className="menu menu-sm gap-0.5 p-0">
             <li className="menu-title text-xs uppercase tracking-wider opacity-50 px-2 pt-2 pb-1">Main</li>
             {navItems.map((entry, idx) => {
               if (isGroup(entry)) {
                 const groupActive = entry.children.some(c => location.pathname.startsWith(c.path))
+                const isOpen = openMenus[idx] !== undefined ? openMenus[idx] : groupActive
                 return (
-                  <li key={idx} className={`accordion-item${groupActive ? ' active' : ''}`}>
+                  <li key={idx}>
                     <button
                       type="button"
-                      className="accordion-toggle accordion-item-active:bg-base-content/5 inline-flex w-full items-center gap-2 rounded-lg p-2 text-sm font-medium text-base-content/80 hover:bg-base-content/5"
-                      aria-controls={`nav-collapse-${idx}`}
-                      aria-expanded={groupActive || false}
+                      onClick={() => toggleMenu(idx)}
+                      className={`inline-flex w-full items-center gap-2 rounded-lg p-2 text-sm font-medium hover:bg-base-content/5 transition-colors ${groupActive ? 'text-primary' : 'text-base-content/80'}`}
                     >
                       <span className={`${entry.icon} size-4.5`} />
                       <span className="flex-1 text-left">{entry.label}</span>
-                      <span className="icon-[tabler--chevron-right] accordion-item-active:rotate-90 size-4 shrink-0 transition-transform duration-300" />
+                      <span className={`icon-[tabler--chevron-right] size-4 shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`} />
                     </button>
                     <div
-                      id={`nav-collapse-${idx}`}
-                      className="accordion-content w-full overflow-hidden transition-[height] duration-300"
-                      role="region"
+                      className="overflow-hidden transition-all duration-200 ease-in-out"
+                      style={{ maxHeight: isOpen ? '200px' : '0px', opacity: isOpen ? 1 : 0 }}
                     >
-                      <ul className="menu menu-sm ps-6 pe-0 py-1">
+                      <ul className="menu menu-sm ps-7 pe-0 py-1 gap-0.5">
                         {entry.children.map((child) => {
                           const childActive = location.pathname.startsWith(child.path)
                           return (
