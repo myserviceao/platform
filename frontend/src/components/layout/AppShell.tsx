@@ -41,6 +41,11 @@ const navItems: NavEntry[] = [
         icon: 'icon-[tabler--send]',
         path: '/app/pm-outreach',
       },
+      {
+        label: 'PM Planner',
+        icon: 'icon-[tabler--map-pin]',
+        path: '/app/pm-planner',
+      },
     ],
   },
   {
