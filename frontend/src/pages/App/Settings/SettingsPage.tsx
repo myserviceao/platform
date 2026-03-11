@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTheme, type Theme } from '@/hooks/useTheme'
+import { useAuth } from '@/hooks/useAuth'
 
 const THEMES: { value: Theme; label: string; description: string; icon: string }[] = [
   { value: 'dark', label: 'Dark', description: 'Easy on the eyes, great for night work.', icon: 'icon-[tabler--moon]' },
@@ -8,6 +9,113 @@ const THEMES: { value: Theme; label: string; description: string; icon: string }
 ]
 
 interface Vendor { id: number; name: string; contactName?: string; phone?: string; email?: string }
+
+
+function ProfileSettings() {
+  const { user } = useAuth()
+  const [title, setTitle] = useState(user?.title || '')
+  const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [logoPreview, setLogoPreview] = useState(user?.tenant?.logoUrl || '')
+  const [msg, setMsg] = useState('')
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const saveTitle = async () => {
+    setSaving(true); setMsg('')
+    const res = await fetch('/api/profile/title', {
+      method: 'PUT', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title })
+    })
+    if (res.ok) setMsg('Title saved! Reload to see changes in sidebar.')
+    else setMsg('Failed to save title')
+    setSaving(false)
+  }
+
+  const uploadLogo = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true); setMsg('')
+    const form = new FormData()
+    form.append('file', file)
+    const res = await fetch('/api/profile/logo', {
+      method: 'POST', credentials: 'include', body: form
+    })
+    if (res.ok) {
+      const d = await res.json()
+      setLogoPreview(d.logoUrl)
+      setMsg('Logo uploaded! Reload to see changes in sidebar.')
+    } else {
+      const d = await res.json()
+      setMsg(d.error || 'Upload failed')
+    }
+    setUploading(false)
+  }
+
+  const removeLogo = async () => {
+    const res = await fetch('/api/profile/logo', { method: 'DELETE', credentials: 'include' })
+    if (res.ok) {
+      setLogoPreview('')
+      setMsg('Logo removed.')
+    }
+  }
+
+  return (
+    <div className="card bg-base-100 shadow-sm">
+      <div className="card-body gap-5">
+        <div>
+          <h2 className="text-base-content font-semibold text-base">Profile & Branding</h2>
+          <p className="text-base-content/60 text-sm mt-0.5">Your logo and display title shown in the sidebar.</p>
+        </div>
+
+        {msg && (
+          <div className="alert alert-soft alert-info text-sm py-2">{msg}</div>
+        )}
+
+        {/* Logo upload */}
+        <div className="flex items-center gap-4">
+          {logoPreview ? (
+            <img src={logoPreview} alt="Logo" className="w-16 h-16 rounded-full object-cover border border-base-content/10" />
+          ) : (
+            <div className="w-16 h-16 rounded-full bg-base-200 flex items-center justify-center">
+              <span className="icon-[tabler--photo] size-6 text-base-content/30" />
+            </div>
+          )}
+          <div className="space-y-1">
+            <input ref={fileRef} type="file" accept="image/*" onChange={uploadLogo} className="hidden" />
+            <button onClick={() => fileRef.current?.click()} className="btn btn-sm btn-primary gap-1" disabled={uploading}>
+              <span className="icon-[tabler--upload] size-4" />
+              {uploading ? 'Uploading...' : 'Upload Logo'}
+            </button>
+            {logoPreview && (
+              <button onClick={removeLogo} className="btn btn-sm btn-ghost text-error gap-1">
+                <span className="icon-[tabler--trash] size-3.5" /> Remove
+              </button>
+            )}
+            <p className="text-xs text-base-content/40">PNG, JPG, or SVG. Max 2MB.</p>
+          </div>
+        </div>
+
+        {/* Title */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-base-content">Display Title</label>
+          <div className="flex gap-2">
+            <input
+              className="input input-sm flex-1"
+              placeholder="e.g. CEO, Operations Manager, Owner"
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+            />
+            <button onClick={saveTitle} className="btn btn-sm btn-primary" disabled={saving}>
+              {saving ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+          <p className="text-xs text-base-content/40">Shown under your name in the sidebar. Leave blank to show your role.</p>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export function SettingsPage() {
   const { theme, setTheme } = useTheme()
@@ -146,13 +254,8 @@ export function SettingsPage() {
         </div>
       </div>
 
-      {/* Account placeholder */}
-      <div className="card bg-base-100 shadow-sm">
-        <div className="card-body gap-2">
-          <h2 className="text-base-content font-semibold text-base">Account</h2>
-          <p className="text-base-content/40 text-sm">Profile and password settings coming soon.</p>
-        </div>
-      </div>
+      {/* Profile & Logo */}
+      <ProfileSettings />
 
       <div className="card bg-base-100 shadow-sm">
         <div className="card-body gap-2">
