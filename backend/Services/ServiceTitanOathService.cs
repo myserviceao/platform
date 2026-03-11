@@ -1,9 +1,7 @@
-using System.Net.Http.Headers;
-using Microsoft.EntityFrameworkCore;
 using MyServiceAO.Data;
 using MyServiceAO.Services.ServiceTitan;
 
-namespace MyServiceAO.Services;
+namespace MyServiceAO.Services.ServiceTitan;
 
 /// <summary>
 /// Manages ServiceTitan OAuth tokens per tenant.
@@ -46,7 +44,7 @@ public class ServiceTitanOAuthService
                     _logger.LogInformation("[OAuth] Using cached token tenantId={TenantId} expiresAt={ExpiresAt}", tenantId, cached.ExpiresAt);
                     return cached.Token;
                 }
-                _logger.LogInformation("[OAuth] Cached token expiring soon or expired, refreshing tenantId={TenantId}", tenantId);
+                _logger.LogInformation("[OAuth] Token expiring soon, refreshing tenantId={TenantId}", tenantId);
             }
         }
 
@@ -65,9 +63,8 @@ public class ServiceTitanOAuthService
             return null;
         }
 
-        // ST tokens are valid for 1 hour; store with expiry
-        var expiresAt = DateTime.UtcNow.AddMinutes(55); // 5 min buffer built in
-
+        // ST tokens are valid for 1 hour; cache with 5 min buffer
+        var expiresAt = DateTime.UtcNow.AddMinutes(55);
         lock (_lock)
         {
             _cache[tenantId] = (token, expiresAt);
