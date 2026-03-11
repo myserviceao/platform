@@ -129,6 +129,13 @@ public class ServiceTitanClient
 
 
 
+
+    public async Task<string> GetJobHistoryAsync(string accessToken, string stTenantId, long jobId)
+    {
+        var url = $"{BaseUrl}/jpm/v2/tenant/{stTenantId}/jobs/{jobId}/history";
+        return await GetAsync(accessToken, url);
+    }
+
     public async Task<string> GetJobHoldReasonsAsync(string accessToken, string stTenantId, int page = 1)
     {
         var url = $"{BaseUrl}/jpm/v2/tenant/{stTenantId}/job-hold-reasons?page={page}&pageSize=200&active=True";
