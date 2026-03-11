@@ -17,55 +17,59 @@ public class PmPlannerController : ControllerBase
         _http = httpFactory.CreateClient();
     }
 
-    /// <summary>
-    /// GET /api/pm-planner
-    /// Returns PM customers grouped by proximity clusters.
-    /// </summary>
+    private class CustomerPoint
+    {
+        public long StCustomerId { get; set; }
+        public string CustomerName { get; set; } = "";
+        public string LocationName { get; set; } = "";
+        public string Address { get; set; } = "";
+        public double Lat { get; set; }
+        public double Lng { get; set; }
+        public string PmStatus { get; set; } = "";
+        public DateTime? LastPmDate { get; set; }
+        public int DaysSince { get; set; }
+    }
+
     [HttpGet]
     public async Task<IActionResult> GetPlannerData([FromQuery] int radiusMinutes = 10)
     {
         var tenantId = HttpContext.Session.GetInt32("tenantId");
         if (tenantId == null) return Unauthorized();
 
-        // Get all PM customers that need service (overdue + coming due)
         var pmCustomers = await _db.PmCustomers
             .Where(p => p.TenantId == tenantId.Value && (p.PmStatus == "Overdue" || p.PmStatus == "ComingDue"))
             .ToListAsync();
 
         var pmCustomerIds = pmCustomers.Select(p => p.StCustomerId).ToHashSet();
 
-        // Get locations for these customers
         var locations = await _db.CustomerLocations
             .Where(l => l.TenantId == tenantId.Value && l.IsGeocoded && pmCustomerIds.Contains(l.StCustomerId))
             .ToListAsync();
 
         var pmMap = pmCustomers.ToDictionary(p => p.StCustomerId);
 
-        // Build customer points
         var points = locations
             .Where(l => l.Latitude.HasValue && l.Longitude.HasValue)
             .Select(l =>
             {
                 pmMap.TryGetValue(l.StCustomerId, out var pm);
-                return new
+                return new CustomerPoint
                 {
-                    stCustomerId = l.StCustomerId,
-                    customerName = l.CustomerName,
-                    locationName = l.LocationName,
-                    address = $"{l.Street}, {l.City}, {l.State} {l.Zip}",
-                    lat = l.Latitude!.Value,
-                    lng = l.Longitude!.Value,
-                    pmStatus = pm?.PmStatus ?? "Unknown",
-                    lastPmDate = pm?.LastPmDate,
-                    daysSince = pm?.LastPmDate.HasValue == true
+                    StCustomerId = l.StCustomerId,
+                    CustomerName = l.CustomerName,
+                    LocationName = l.LocationName,
+                    Address = $"{l.Street}, {l.City}, {l.State} {l.Zip}",
+                    Lat = l.Latitude!.Value,
+                    Lng = l.Longitude!.Value,
+                    PmStatus = pm?.PmStatus ?? "Unknown",
+                    LastPmDate = pm?.LastPmDate,
+                    DaysSince = pm?.LastPmDate.HasValue == true
                         ? (int)(DateTime.UtcNow - pm.LastPmDate.Value).TotalDays
                         : 0
                 };
             })
             .ToList();
 
-        // Cluster by proximity
-        // radiusMinutes: 10 min ~ 8 miles, 30 min ~ 25 miles, 60 min ~ 50 miles
         double radiusMiles = radiusMinutes switch
         {
             <= 10 => 8,
@@ -86,10 +90,6 @@ public class PmPlannerController : ControllerBase
         });
     }
 
-    /// <summary>
-    /// POST /api/pm-planner/geocode
-    /// Geocodes all un-geocoded customer locations.
-    /// </summary>
     [HttpPost("geocode")]
     public async Task<IActionResult> GeocodeLocations()
     {
@@ -98,7 +98,7 @@ public class PmPlannerController : ControllerBase
 
         var ungeocoded = await _db.CustomerLocations
             .Where(l => l.TenantId == tenantId.Value && !l.IsGeocoded && l.Street != "")
-            .Take(50) // Batch to avoid rate limits
+            .Take(50)
             .ToListAsync();
 
         int success = 0;
@@ -134,7 +134,6 @@ public class PmPlannerController : ControllerBase
                     }
                 }
 
-                // Rate limit: 1 request per second for Nominatim
                 await Task.Delay(1100);
             }
             catch
@@ -153,7 +152,7 @@ public class PmPlannerController : ControllerBase
         });
     }
 
-    private static List<object> ClusterByProximity(List<dynamic> points, double radiusMiles)
+    private static List<object> ClusterByProximity(List<CustomerPoint> points, double radiusMiles)
     {
         var used = new HashSet<int>();
         var clusters = new List<object>();
@@ -165,15 +164,15 @@ public class PmPlannerController : ControllerBase
             used.Add(i);
             clusterId++;
 
-            var cluster = new List<dynamic> { points[i] };
+            var cluster = new List<CustomerPoint> { points[i] };
 
             for (int j = i + 1; j < points.Count; j++)
             {
                 if (used.Contains(j)) continue;
 
                 double dist = HaversineDistance(
-                    (double)points[i].lat, (double)points[i].lng,
-                    (double)points[j].lat, (double)points[j].lng
+                    points[i].Lat, points[i].Lng,
+                    points[j].Lat, points[j].Lng
                 );
 
                 if (dist <= radiusMiles)
@@ -187,9 +186,20 @@ public class PmPlannerController : ControllerBase
             {
                 id = clusterId,
                 count = cluster.Count,
-                customers = cluster,
-                centerLat = cluster.Average(c => (double)c.lat),
-                centerLng = cluster.Average(c => (double)c.lng)
+                customers = cluster.Select(c => new
+                {
+                    c.StCustomerId,
+                    customerName = c.CustomerName,
+                    locationName = c.LocationName,
+                    address = c.Address,
+                    lat = c.Lat,
+                    lng = c.Lng,
+                    pmStatus = c.PmStatus,
+                    lastPmDate = c.LastPmDate,
+                    daysSince = c.DaysSince
+                }),
+                centerLat = cluster.Average(c => c.Lat),
+                centerLng = cluster.Average(c => c.Lng)
             });
         }
 
@@ -198,7 +208,7 @@ public class PmPlannerController : ControllerBase
 
     private static double HaversineDistance(double lat1, double lon1, double lat2, double lon2)
     {
-        const double R = 3959; // Earth radius in miles
+        const double R = 3959;
         var dLat = (lat2 - lat1) * Math.PI / 180;
         var dLon = (lon2 - lon1) * Math.PI / 180;
         var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
