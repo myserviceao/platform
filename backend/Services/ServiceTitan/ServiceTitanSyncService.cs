@@ -770,4 +770,72 @@ public class SyncResult
     public bool Success { get; set; }
     public DateTime? SyncedAt { get; set; }
     public string? Error { get; set; }
-}
+}            // 4c. Resolve hold reasons from appointment export
+            // The job export may not include holdReasonId, but the appointment export does
+            var unresolvedHoldJobs = await _db.Jobs
+                .Where(j => j.TenantId == tenantId && j.Status == "Hold" && j.HoldReasonName == null)
+                .ToListAsync();
+
+            if (unresolvedHoldJobs.Count > 0 && holdReasonIdMap.Count > 0)
+            {
+                _logger.LogInformation("[Sync] Resolving hold reasons for {Count} jobs via appointment export", unresolvedHoldJobs.Count);
+
+                // Build a map of jobId -> holdReasonId from appointment export
+                var jobHoldReasons = new Dictionary<long, long>();
+                string? apptContinue = null;
+                bool apptHasMore = true;
+                while (apptHasMore)
+                {
+                    var apptRaw = await _client.GetAppointmentsExportAsync(token, stTenantId, apptContinue);
+                    var apptDoc = JsonDocument.Parse(apptRaw);
+                    var apptRoot = apptDoc.RootElement;
+                    apptHasMore = apptRoot.TryGetProperty("hasMore", out var ahm) && ahm.GetBoolean();
+                    apptContinue = apptRoot.TryGetProperty("continueFrom", out var acf) ? acf.GetString() : null;
+
+                    if (!apptRoot.TryGetProperty("data", out var apptData)) break;
+
+                    foreach (var appt in apptData.EnumerateArray())
+                    {
+                        var apptStatus = appt.TryGetProperty("status", out var asProp) && asProp.ValueKind == JsonValueKind.String
+                            ? asProp.GetString() : "";
+                        if (apptStatus != "Hold") continue;
+
+                        long apptJobId = 0;
+                        if (appt.TryGetProperty("jobId", out var jidProp) && jidProp.ValueKind == JsonValueKind.Number)
+                            apptJobId = jidProp.GetInt64();
+
+                        if (apptJobId == 0) continue;
+
+                        // Try to get holdReasonId from the appointment
+                        if (appt.TryGetProperty("holdReasonId", out var hrProp2) && hrProp2.ValueKind == JsonValueKind.Number)
+                        {
+                            jobHoldReasons[apptJobId] = hrProp2.GetInt64();
+                        }
+                    }
+
+                    if (!apptHasMore || apptContinue == null) break;
+                }
+
+                _logger.LogInformation("[Sync] Found {Count} appointment hold reasons", jobHoldReasons.Count);
+
+                // Now match hold reasons to jobs
+                int resolved = 0;
+                foreach (var hj in unresolvedHoldJobs)
+                {
+                    if (jobHoldReasons.TryGetValue(hj.StJobId, out var apptHoldReasonId))
+                    {
+                        if (holdReasonIdMap.TryGetValue(apptHoldReasonId, out var reasonName))
+                        {
+                            hj.HoldReasonName = reasonName;
+                            resolved++;
+                            _logger.LogInformation("[Sync] Job #{JobNum} hold reason: {Reason} (from appt)", hj.JobNumber, reasonName);
+                        }
+                    }
+                }
+
+                if (resolved > 0)
+                    await _db.SaveChangesAsync();
+
+                _logger.LogInformation("[Sync] Resolved {Resolved}/{Total} hold reasons from appointments", resolved, unresolvedHoldJobs.Count);
+            }
+
