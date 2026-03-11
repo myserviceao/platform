@@ -18,6 +18,7 @@ public class AppDbContext : DbContext
     public DbSet<AppointmentTechnician> AppointmentTechnicians => Set<AppointmentTechnician>();
     public DbSet<Vendor> Vendors => Set<Vendor>();
     public DbSet<ApBill> ApBills => Set<ApBill>();
+    public DbSet<CustomerLocation> CustomerLocations => Set<CustomerLocation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -121,6 +122,16 @@ public class AppDbContext : DbContext
              .WithMany()
              .HasForeignKey(v => v.TenantId);
             e.Property(v => v.Name).IsRequired().HasMaxLength(200);
+        });
+
+        // CustomerLocation
+        modelBuilder.Entity<CustomerLocation>(e =>
+        {
+            e.HasKey(l => l.Id);
+            e.HasIndex(l => new { l.TenantId, l.StLocationId }).IsUnique();
+            e.HasOne(l => l.Tenant)
+             .WithMany()
+             .HasForeignKey(l => l.TenantId);
         });
 
         // ApBill (AP invoices)
