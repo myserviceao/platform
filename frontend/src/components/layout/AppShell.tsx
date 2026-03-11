@@ -17,6 +17,27 @@ interface NavGroup {
 
 type NavEntry = NavItem | NavGroup
 
+
+const THEME_OPTIONS: { value: string; label: string; group: 'dark' | 'light' }[] = [
+  { value: 'dark', label: 'Dark', group: 'dark' },
+  { value: 'black', label: 'Black', group: 'dark' },
+  { value: 'shadcn', label: 'Shadcn', group: 'dark' },
+  { value: 'vscode', label: 'VS Code', group: 'dark' },
+  { value: 'spotify', label: 'Spotify', group: 'dark' },
+  { value: 'slack', label: 'Slack', group: 'dark' },
+  { value: 'valorant', label: 'Valorant', group: 'dark' },
+  { value: 'claude', label: 'Claude', group: 'dark' },
+  { value: 'luxury', label: 'Luxury', group: 'dark' },
+  { value: 'light', label: 'Light', group: 'light' },
+  { value: 'corporate', label: 'Corporate', group: 'light' },
+  { value: 'soft', label: 'Soft', group: 'light' },
+  { value: 'pastel', label: 'Pastel', group: 'light' },
+  { value: 'gourmet', label: 'Gourmet', group: 'light' },
+  { value: 'ghibli', label: 'Ghibli', group: 'light' },
+  { value: 'mintlify', label: 'Mintlify', group: 'light' },
+  { value: 'perplexity', label: 'Perplexity', group: 'light' },
+]
+
 function isGroup(entry: NavEntry): entry is NavGroup {
   return 'children' in entry
 }
@@ -70,7 +91,8 @@ const navItems: NavEntry[] = [
   },
 ]
 
-const THEMES: { value: Theme; label: string; icon: string }[] = [
+// Legacy THEMES removed, using THEME_OPTIONS
+const _LEGACY_THEMES: { value: Theme; label: string; icon: string }[] = [
   { value: 'dark', label: 'Dark', icon: 'icon-[tabler--moon]' },
   { value: 'light', label: 'Light', icon: 'icon-[tabler--sun]' },
   { value: 'corporate', label: 'Corporate', icon: 'icon-[tabler--building]' },
@@ -350,6 +372,27 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             })}
             <li className="menu-title text-xs uppercase tracking-wider opacity-50 px-2 pt-4 pb-1">Settings</li>
             <li>
+                <div className="flex items-center gap-2 p-2 text-sm text-base-content/60">
+                  <span className="icon-[tabler--palette] size-4.5" />
+                  <select
+                    value={theme}
+                    onChange={e => setTheme(e.target.value as Theme)}
+                    className="select select-xs select-ghost flex-1 text-xs"
+                  >
+                    <optgroup label="Dark Themes">
+                      {THEME_OPTIONS.filter(t => t.group === 'dark').map(t => (
+                        <option key={t.value} value={t.value}>{t.label}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Light Themes">
+                      {THEME_OPTIONS.filter(t => t.group === 'light').map(t => (
+                        <option key={t.value} value={t.value}>{t.label}</option>
+                      ))}
+                    </optgroup>
+                  </select>
+                </div>
+              </li>
+              <li>
               <Link to="/app/settings" onClick={() => setSidebarOpen(false)} className={location.pathname.startsWith('/app/settings') ? 'menu-active' : ''}>
                 <span className="icon-[tabler--settings] size-4.5" />
                 Settings
