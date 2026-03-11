@@ -39,11 +39,6 @@ public class ServiceTitanClient
         return json.RootElement.GetProperty("access_token").GetString();
     }
 
-    /// <summary>
-    /// Fetches all job types from ST and returns a jobTypeId -> name map.
-    /// Job export records only contain jobTypeId (not the name), so this
-    /// lookup is required to determine if a job is a PM.
-    /// </summary>
     public async Task<Dictionary<long, string>> GetJobTypeMapAsync(string accessToken, string stTenantId)
     {
         var map = new Dictionary<long, string>();
@@ -67,9 +62,6 @@ public class ServiceTitanClient
         return map;
     }
 
-    /// <summary>
-    /// Fetches all customers from ST export and returns a customerId -> name map.
-    /// </summary>
     public async Task<Dictionary<long, string>> GetCustomerNameMapAsync(string accessToken, string stTenantId)
     {
         var map = new Dictionary<long, string>();
@@ -108,6 +100,29 @@ public class ServiceTitanClient
         var url = $"{BaseUrl}/jpm/v2/tenant/{stTenantId}/export/jobs?includeRecentChanges=true";
         if (!string.IsNullOrEmpty(from)) url += $"&from={Uri.EscapeDataString(from)}";
         _logger.LogInformation("[ST] GET jobs url={Url}", url);
+        return await GetAsync(accessToken, url);
+    }
+
+    public async Task<string> GetAppointmentsAsync(string accessToken, string stTenantId,
+        DateTime startsOnOrAfter, DateTime startsOnOrBefore, int page = 1, int pageSize = 500)
+    {
+        var from = startsOnOrAfter.ToString("O");
+        var to   = startsOnOrBefore.ToString("O");
+        var url  = $"{BaseUrl}/jpm/v2/tenant/{stTenantId}/appointments"
+                 + $"?pageSize={pageSize}&page={page}"
+                 + $"&startsOnOrAfter={Uri.EscapeDataString(from)}"
+                 + $"&startsOnOrBefore={Uri.EscapeDataString(to)}";
+        _logger.LogInformation("[ST] GET appointments url={Url}", url);
+        return await GetAsync(accessToken, url);
+    }
+
+    public async Task<string> GetAppointmentAssignmentsAsync(string accessToken, string stTenantId,
+        IEnumerable<long> appointmentIds, int pageSize = 500)
+    {
+        var ids = string.Join(",", appointmentIds);
+        var url = $"{BaseUrl}/dispatch/v2/tenant/{stTenantId}/appointment-assignments"
+                + $"?appointmentIds={ids}&pageSize={pageSize}&active=Any";
+        _logger.LogInformation("[ST] GET appt-assignments url={Url}", url);
         return await GetAsync(accessToken, url);
     }
 
