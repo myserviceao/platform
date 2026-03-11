@@ -75,7 +75,7 @@ function ProfileSettings() {
         {/* Logo upload */}
         <div className="flex items-center gap-4">
           {logoPreview ? (
-            <img src={logoPreview} alt="Logo" className="w-16 h-16 rounded-full object-cover border border-base-content/10" />
+            <img src={logoPreview} alt="Logo" className="max-h-16 max-w-[10rem] object-contain" />
           ) : (
             <div className="w-16 h-16 rounded-full bg-base-200 flex items-center justify-center">
               <span className="icon-[tabler--photo] size-6 text-base-content/30" />
