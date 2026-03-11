@@ -240,9 +240,9 @@ public class DashboardController : ControllerBase
             JobSample     = jobSample,
             InvoiceSample = invoiceSample
         });
-    
-    [HttpGet("job-history/{stJobId}")]
     }
+
+    [HttpGet("job-history/{stJobId}")]
     public async Task<IActionResult> GetJobHistory(long stJobId)
     {
         var tenantId = HttpContext.Session.GetInt32("tenantId");
