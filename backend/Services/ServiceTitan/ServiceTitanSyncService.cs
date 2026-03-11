@@ -678,9 +678,10 @@ public class ServiceTitanSyncService
 
     public async Task<string> GetJobHistoryRawAsync(int tenantId, long stJobId)
     {
+        var token = await _oauth.GetValidTokenAsync(tenantId);
+        if (token == null) return "{}";
         var tenant = await _db.Tenants.FindAsync(tenantId);
         if (tenant == null) return "{}";
-        var token = await _oauth.GetAccessTokenAsync(tenant.StClientId, tenant.StClientSecret);
         return await _client.GetJobHistoryAsync(token, tenant.StTenantId, stJobId);
     }
 }
