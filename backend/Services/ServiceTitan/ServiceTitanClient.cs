@@ -127,6 +127,15 @@ public class ServiceTitanClient
     }
 
 
+
+    public async Task<string> GetLocationsExportAsync(string accessToken, string stTenantId, string? from = null)
+    {
+        var url = $"{BaseUrl}/crm/v2/tenant/{stTenantId}/export/locations";
+        if (from != null) url += $"?from={from}";
+        _logger.LogInformation("[ST] GET locations-export from={From}", from ?? "start");
+        return await GetAsync(accessToken, url);
+    }
+
     public async Task<string> GetCustomerContactsExportAsync(string accessToken, string stTenantId, string? from = null)
     {
         var url = $"{BaseUrl}/crm/v2/tenant/{stTenantId}/export/customers/contacts";
