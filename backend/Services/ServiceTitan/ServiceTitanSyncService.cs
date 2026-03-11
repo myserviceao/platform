@@ -297,6 +297,17 @@ public class ServiceTitanSyncService
                     if (job.TryGetProperty("holdReasonId", out var hrProp) && hrProp.ValueKind == JsonValueKind.Number)
                         holdReasonId = hrProp.GetInt64();
 
+                    // Also try alternate field names
+                    if (!holdReasonId.HasValue && job.TryGetProperty("jobHoldReasonId", out var jhrProp) && jhrProp.ValueKind == JsonValueKind.Number)
+                        holdReasonId = jhrProp.GetInt64();
+
+                    // Log all properties for hold jobs to debug
+                    if (status == "Hold")
+                    {
+                        var allProps = string.Join(", ", job.EnumerateObject().Select(p => $"{p.Name}={p.Value.ValueKind}"));
+                        _logger.LogInformation("[Sync] Hold job #{JobNum} props: {Props} holdReasonId={HoldId}", jobNumber, allProps, holdReasonId?.ToString() ?? "NULL");
+                    }
+
                     string? holdReasonName = null;
                     if (holdReasonId.HasValue && holdReasonIdMap.TryGetValue(holdReasonId.Value, out var hrName))
                         holdReasonName = hrName;
