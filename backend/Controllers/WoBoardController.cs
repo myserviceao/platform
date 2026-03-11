@@ -110,5 +110,80 @@ public class WoBoardController : ControllerBase
             holdReasonCount = holdReasons.Count,
             columns = resultColumns
         });
+    
+    /// <summary>
+    /// GET /api/wo-board/holds
+    /// Returns on-hold jobs grouped by hold reason for the Hold Board.
+    /// Each tenant's hold reasons from ServiceTitan become columns.
+    /// </summary>
+    [HttpGet("holds")]
+    public async Task<IActionResult> GetHoldBoard()
+    {
+        var tenantId = HttpContext.Session.GetInt32("tenantId");
+        if (tenantId == null) return Unauthorized();
+
+        // Get all on-hold jobs
+        var holdJobs = await _db.Jobs
+            .Where(j => j.TenantId == tenantId.Value && j.Status == "Hold")
+            .OrderByDescending(j => j.CreatedOn)
+            .Select(j => new BoardJob
+            {
+                Id = j.Id,
+                StJobId = j.StJobId,
+                JobNumber = j.JobNumber,
+                CustomerName = j.CustomerName,
+                Status = j.Status,
+                JobTypeName = j.JobTypeName,
+                HoldReasonName = j.HoldReasonName,
+                TotalAmount = j.TotalAmount,
+                CreatedOn = j.CreatedOn,
+                DaysSince = j.CreatedOn.HasValue
+                    ? (int)(System.DateTime.UtcNow - j.CreatedOn.Value).TotalDays
+                    : 0
+            })
+            .ToListAsync();
+
+        // Get hold reasons for this tenant
+        var holdReasons = await _db.HoldReasons
+            .Where(h => h.TenantId == tenantId.Value && h.Active)
+            .OrderBy(h => h.Name)
+            .Select(h => h.Name)
+            .ToListAsync();
+
+        var columns = new List<object>();
+        var assignedIds = new HashSet<int>();
+
+        if (holdReasons.Count > 0)
+        {
+            foreach (var reason in holdReasons)
+            {
+                var reasonJobs = holdJobs
+                    .Where(j => string.Equals(j.HoldReasonName, reason, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                foreach (var rj in reasonJobs) assignedIds.Add(rj.Id);
+                columns.Add(new { key = reason, label = reason, count = reasonJobs.Count, jobs = reasonJobs });
+            }
+
+            var unmatched = holdJobs.Where(j => !assignedIds.Contains(j.Id)).ToList();
+            if (unmatched.Count > 0)
+            {
+                columns.Add(new { key = "unassigned", label = "Unassigned", count = unmatched.Count, jobs = unmatched });
+            }
+        }
+        else
+        {
+            // No hold reasons synced - show all in one column
+            columns.Add(new { key = "all", label = "On Hold", count = holdJobs.Count, jobs = holdJobs });
+        }
+
+        return Ok(new
+        {
+            totalHolds = holdJobs.Count,
+            holdReasonCount = holdReasons.Count,
+            totalAmount = holdJobs.Sum(j => j.TotalAmount),
+            columns
+        });
     }
+
+}
 }
