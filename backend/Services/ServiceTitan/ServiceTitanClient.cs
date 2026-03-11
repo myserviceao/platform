@@ -130,6 +130,13 @@ public class ServiceTitanClient
 
 
 
+
+    public async Task<string> GetJobAsync(string accessToken, string stTenantId, long jobId)
+    {
+        var url = $"{BaseUrl}/jpm/v2/tenant/{stTenantId}/jobs/{jobId}";
+        return await GetAsync(accessToken, url);
+    }
+
     public async Task<string> GetJobHistoryAsync(string accessToken, string stTenantId, long jobId)
     {
         var url = $"{BaseUrl}/jpm/v2/tenant/{stTenantId}/jobs/{jobId}/history";
