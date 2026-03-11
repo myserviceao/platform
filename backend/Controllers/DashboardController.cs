@@ -240,5 +240,15 @@ public class DashboardController : ControllerBase
             JobSample     = jobSample,
             InvoiceSample = invoiceSample
         });
+    
+    [HttpGet("job-history/{stJobId}")]
+    public async Task<IActionResult> GetJobHistory(long stJobId)
+    {
+        var tenantId = HttpContext.Session.GetInt32("tenantId");
+        if (tenantId == null) return Unauthorized();
+        var raw = await _sync.GetJobHistoryRawAsync(tenantId.Value, stJobId);
+        return Content(raw, "application/json");
     }
+
+}
 }
