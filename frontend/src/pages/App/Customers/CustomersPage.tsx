@@ -24,6 +24,7 @@ function pmBadgeClass(status: string) {
   switch (status) {
     case 'Overdue': return 'badge-error'
     case 'ComingDue': return 'badge-warning'
+    case 'NoPm': return 'badge-ghost'
     default: return 'badge-success'
   }
 }
@@ -32,6 +33,7 @@ function pmIconClass(status: string) {
   switch (status) {
     case 'Overdue': return 'icon-[tabler--alert-circle] text-error'
     case 'ComingDue': return 'icon-[tabler--clock] text-warning'
+    case 'NoPm': return 'icon-[tabler--minus] text-base-content/30'
     default: return 'icon-[tabler--circle-check] text-success'
   }
 }
@@ -41,7 +43,7 @@ export function CustomersPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
-  const [filter, setFilter] = useState<'all' | 'overdue' | 'comingdue'>('all')
+  const [filter, setFilter] = useState<'all' | 'overdue' | 'comingdue' | 'nopm'>('all')
   const navigate = useNavigate()
 
   const fetchCustomers = useCallback(async () => {
@@ -58,12 +60,14 @@ export function CustomersPage() {
     .filter(c => {
       if (filter === 'overdue') return c.pmStatus === 'Overdue'
       if (filter === 'comingdue') return c.pmStatus === 'ComingDue'
+      if (filter === 'nopm') return c.pmStatus === 'NoPm'
       return true
     })
     .filter(c => c.name.toLowerCase().includes(search.toLowerCase()))
 
   const overdueCount = customers.filter(c => c.pmStatus === 'Overdue').length
   const comingDueCount = customers.filter(c => c.pmStatus === 'ComingDue').length
+  const noPmCount = customers.filter(c => c.pmStatus === 'NoPm').length
 
   if (loading) {
     return (
@@ -117,26 +121,17 @@ export function CustomersPage() {
           />
         </div>
         <div className="tabs tabs-bordered">
-          <button
-            onClick={() => setFilter('all')}
-            className={`tab ${filter === 'all' ? 'tab-active' : ''}`}
-          >
-            All
-            <span className="badge badge-soft badge-sm ms-2">{customers.length}</span>
+          <button onClick={() => setFilter('all')} className={`tab ${filter === 'all' ? 'tab-active' : ''}`}>
+            All <span className="badge badge-soft badge-sm ms-2">{customers.length}</span>
           </button>
-          <button
-            onClick={() => setFilter('overdue')}
-            className={`tab ${filter === 'overdue' ? 'tab-active' : ''}`}
-          >
-            Overdue
-            <span className="badge badge-soft badge-error badge-sm ms-2">{overdueCount}</span>
+          <button onClick={() => setFilter('overdue')} className={`tab ${filter === 'overdue' ? 'tab-active' : ''}`}>
+            Overdue <span className="badge badge-soft badge-error badge-sm ms-2">{overdueCount}</span>
           </button>
-          <button
-            onClick={() => setFilter('comingdue')}
-            className={`tab ${filter === 'comingdue' ? 'tab-active' : ''}`}
-          >
-            Coming Due
-            <span className="badge badge-soft badge-warning badge-sm ms-2">{comingDueCount}</span>
+          <button onClick={() => setFilter('comingdue')} className={`tab ${filter === 'comingdue' ? 'tab-active' : ''}`}>
+            Coming Due <span className="badge badge-soft badge-warning badge-sm ms-2">{comingDueCount}</span>
+          </button>
+          <button onClick={() => setFilter('nopm')} className={`tab ${filter === 'nopm' ? 'tab-active' : ''}`}>
+            No PM <span className="badge badge-soft badge-sm ms-2">{noPmCount}</span>
           </button>
         </div>
       </div>
@@ -150,9 +145,7 @@ export function CustomersPage() {
           {filtered.map(c => {
             const days = daysAgo(c.lastPmDate)
             return (
-              <button
-                key={c.id}
-                onClick={() => navigate(`/app/customers/${c.id}`)}
+              <button key={c.id} onClick={() => navigate(`/app/customers/${c.id}`)}
                 className="rounded-box border border-base-content/10 bg-base-100 p-4 text-left hover:border-primary/40 hover:bg-base-200 transition-all group"
               >
                 <div className="flex items-start justify-between gap-2 mb-3">
@@ -163,32 +156,22 @@ export function CustomersPage() {
                       </div>
                     </div>
                     <div>
-                      <div className="font-medium text-base-content text-sm leading-tight group-hover:text-primary transition-colors">
-                        {c.name}
-                      </div>
-                      <div className="text-xs text-base-content/40 mt-0.5">
-                        ST #{c.serviceTitanCustomerId}
-                      </div>
+                      <div className="font-medium text-base-content text-sm leading-tight group-hover:text-primary transition-colors">{c.name}</div>
+                      <div className="text-xs text-base-content/40 mt-0.5">ST #{c.serviceTitanCustomerId}</div>
                     </div>
                   </div>
                   <span className="icon-[tabler--chevron-right] size-4 text-base-content/30 group-hover:text-primary shrink-0 mt-1 transition-colors" />
                 </div>
-
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 text-xs text-base-content/50">
                     <span className={`${pmIconClass(c.pmStatus)} size-3.5`} />
                     Last PM: {c.lastPmDate ? fmtDate(c.lastPmDate) : 'None on file'}
                   </div>
                   <span className={`badge badge-soft badge-xs ${pmBadgeClass(c.pmStatus)}`}>
-                    {c.pmStatus === 'ComingDue' ? 'Coming Due' : c.pmStatus}
+                    {c.pmStatus === 'ComingDue' ? 'Coming Due' : c.pmStatus === 'NoPm' ? 'No PM' : c.pmStatus}
                   </span>
                 </div>
-
-                {days !== null && (
-                  <div className="text-xs text-base-content/30 mt-1">
-                    {days} days ago
-                  </div>
-                )}
+                {days !== null && <div className="text-xs text-base-content/30 mt-1">{days} days ago</div>}
               </button>
             )
           })}
