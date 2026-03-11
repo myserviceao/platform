@@ -21,209 +21,147 @@ public class ServiceTitanSyncService
 
     public async Task<SyncResult> SyncAllAsync(int tenantId)
     {
-        _logger.LogInformation("[ST Sync] Starting sync tenantId={TenantId}", tenantId);
-
-        var tenant = await _db.Tenants.FindAsync(tenantId);
-        if (tenant?.StTenantId == null)
-            return new SyncResult { Success = false, Error = "Tenant not connected to ServiceTitan" };
-
-        var token = await _oauth.GetValidTokenAsync(tenantId);
-        if (token == null)
-            return new SyncResult { Success = false, Error = "Could not obtain access token" };
-
-        var snapshot = await _db.DashboardSnapshots.FirstOrDefaultAsync(d => d.TenantId == tenantId)
-                       ?? new DashboardSnapshot { TenantId = tenantId };
-
-        var errors = new List<string>();
-        var lastPmByCustomer = new Dictionary<long, DateTime>();
-
         try
         {
-            var from = DateTime.UtcNow.AddMonths(-2).ToString("yyyy-MM-dd");
-            await SyncInvoicesAsync(token, tenant.StTenantId, snapshot, from);
-        }
-        catch (Exception ex) { _logger.LogError(ex, "[ST Sync] Invoices failed"); errors.Add("invoices: " + ex.Message); }
+            var token = await _oauth.GetValidTokenAsync(tenantId);
+            if (token == null)
+                return new SyncResult { Success = false, Error = "Not connected to ServiceTitan" };
 
-        try
-        {
-            var jobTypeMap = await _client.GetJobTypeMapAsync(token, tenant.StTenantId);
-            var from = DateTime.UtcNow.AddMonths(-18).ToString("yyyy-MM-dd");
-            await SyncJobsAsync(token, tenant.StTenantId, snapshot, from, jobTypeMap, lastPmByCustomer);
-        }
-        catch (Exception ex) { _logger.LogError(ex, "[ST Sync] Jobs failed"); errors.Add("jobs: " + ex.Message); }
+            var tenant = await _db.Tenants.FindAsync(tenantId);
+            if (tenant?.StTenantId == null)
+                return new SyncResult { Success = false, Error = "ST Tenant ID not configured" };
 
-        try
-        {
-            var customerNames = await _client.GetCustomerNameMapAsync(token, tenant.StTenantId);
-            await PersistPmCustomersAsync(tenantId, lastPmByCustomer, customerNames);
-        }
-        catch (Exception ex) { _logger.LogError(ex, "[ST Sync] PM customers failed"); errors.Add("pm-customers: " + ex.Message); }
+            var stTenantId = tenant.StTenantId;
 
-        var overdueDate = DateTime.UtcNow.AddMonths(-6);
-        snapshot.OverduePmCount = lastPmByCustomer.Values.Count(d => d < overdueDate);
+            // 1. Load job type name map (id -> name)
+            var jobTypeMap = await _client.GetJobTypeMapAsync(token, stTenantId);
+            _logger.LogInformation("[Sync] tenantId={TenantId} jobTypes={Count}", tenantId, jobTypeMap.Count);
 
-        _logger.LogInformation("[ST Sync] PM customers tracked={Total} overdue={Overdue}", lastPmByCustomer.Count, snapshot.OverduePmCount);
+            // 2. Load customer name map (stCustomerId -> name)
+            var customerNameMap = await _client.GetCustomerNameMapAsync(token, stTenantId);
+            _logger.LogInformation("[Sync] tenantId={TenantId} customers={Count}", tenantId, customerNameMap.Count);
 
-        snapshot.SnapshotTakenAt = DateTime.UtcNow;
-        if (snapshot.Id == 0) _db.DashboardSnapshots.Add(snapshot);
-        tenant.LastSyncedAt = DateTime.UtcNow;
-        await _db.SaveChangesAsync();
+            // 3. Export all jobs and find PM jobs
+            // Use completedOn ?? createdOn — same logic as original PatriotMechanical app
+            var pmDates = new Dictionary<long, DateTime>();
+            int pmFound = 0;
 
-        return new SyncResult { Success = true, SyncedAt = snapshot.SnapshotTakenAt, Error = errors.Count > 0 ? string.Join("; ", errors) : null };
-    }
-
-    private async Task PersistPmCustomersAsync(int tenantId, Dictionary<long, DateTime> lastPmByCustomer, Dictionary<long, string> customerNames)
-    {
-        var now = DateTime.UtcNow;
-        var overdueDate = now.AddMonths(-6);
-        var comingDueDate = now.AddMonths(-4);
-
-        foreach (var (stCustomerId, lastPmDate) in lastPmByCustomer)
-        {
-            var status = lastPmDate < overdueDate ? "Overdue"
-                       : lastPmDate < comingDueDate ? "ComingDue"
-                       : "Current";
-
-            var name = customerNames.TryGetValue(stCustomerId, out var n) ? n : "Customer " + stCustomerId;
-
-            var existing = await _db.PmCustomers
-                .FirstOrDefaultAsync(p => p.TenantId == tenantId && p.StCustomerId == stCustomerId);
-
-            if (existing == null)
+            string? continueFrom = null;
+            bool hasMore;
+            do
             {
-                _db.PmCustomers.Add(new PmCustomer
+                var (jobs, nextToken, more) = await _client.ExportJobsPageAsync(token, stTenantId, continueFrom);
+                continueFrom = nextToken;
+                hasMore = more;
+
+                foreach (var job in jobs)
                 {
-                    TenantId = tenantId,
-                    StCustomerId = stCustomerId,
-                    CustomerName = name,
-                    LastPmDate = lastPmDate,
-                    PmStatus = status,
-                    UpdatedAt = now
-                });
-            }
-            else
-            {
-                existing.CustomerName = name;
-                existing.LastPmDate = lastPmDate;
-                existing.PmStatus = status;
-                existing.UpdatedAt = now;
-            }
-        }
+                    // Resolve job type name
+                    string? jobTypeName = null;
+                    if (job.TryGetProperty("jobTypeId", out var jtProp) && jtProp.ValueKind == JsonValueKind.Number)
+                        jobTypeMap.TryGetValue(jtProp.GetInt64(), out jobTypeName);
 
-        await _db.SaveChangesAsync();
-        _logger.LogInformation("[ST Sync] PM customers persisted count={Count}", lastPmByCustomer.Count);
-    }
+                    if (jobTypeName == null) continue;
+                    if (!PmKeywords.Any(k => jobTypeName.ToLower().Contains(k))) continue;
 
-    private async Task SyncInvoicesAsync(string token, string stTenantId, DashboardSnapshot snapshot, string from)
-    {
-        var now = DateTime.UtcNow;
-        var thisMonthStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
-        var lastMonthStart = thisMonthStart.AddMonths(-1);
-        var lastMonthEnd = thisMonthStart;
-        decimal revenueThisMonth = 0, revenueLastMonth = 0, ar = 0;
-        int unpaidCount = 0, totalRecords = 0;
-        string? continueFrom = from;
+                    var customerId = job.GetProperty("customerId").GetInt64();
 
-        do
-        {
-            var json = await _client.GetInvoicesExportAsync(token, stTenantId, continueFrom);
-            var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
-            if (!root.TryGetProperty("data", out var data)) break;
-            foreach (var inv in data.EnumerateArray())
-            {
-                totalRecords++;
-                var total = ParseDecimal(inv, "total");
-                var balance = ParseDecimal(inv, "balance");
-                var invoiceDate = ParseDateTime(inv, "invoiceDate");
-                if (invoiceDate == null) continue;
-                if (invoiceDate >= thisMonthStart) revenueThisMonth += total;
-                if (invoiceDate >= lastMonthStart && invoiceDate < lastMonthEnd) revenueLastMonth += total;
-                if (balance > 0) { ar += balance; unpaidCount++; }
-            }
-            var hasMore = root.TryGetProperty("hasMore", out var hm) && hm.GetBoolean();
-            continueFrom = hasMore && root.TryGetProperty("continueFrom", out var cf) ? cf.GetString() : null;
-            if (!hasMore) break;
-        } while (continueFrom != null);
+                    // completedOn ?? createdOn (same as old app: CompletedAt ?? CreatedAt)
+                    DateTime? completedOn = null;
+                    if (job.TryGetProperty("completedOn", out var coProp) &&
+                        coProp.ValueKind == JsonValueKind.String &&
+                        DateTime.TryParse(coProp.GetString(), null,
+                            System.Globalization.DateTimeStyles.AssumeUniversal |
+                            System.Globalization.DateTimeStyles.AdjustToUniversal,
+                            out var parsedCompleted))
+                    {
+                        completedOn = DateTime.SpecifyKind(parsedCompleted, DateTimeKind.Utc);
+                    }
 
-        _logger.LogInformation("[ST Sync] Invoices processed={Total} revThis={RevThis} ar={AR}", totalRecords, revenueThisMonth, ar);
-        snapshot.RevenueThisMonth = revenueThisMonth;
-        snapshot.RevenueLastMonth = revenueLastMonth;
-        snapshot.AccountsReceivable = ar;
-        snapshot.UnpaidInvoiceCount = unpaidCount;
-    }
+                    DateTime? createdOn = null;
+                    if (job.TryGetProperty("createdOn", out var crProp) &&
+                        crProp.ValueKind == JsonValueKind.String &&
+                        DateTime.TryParse(crProp.GetString(), null,
+                            System.Globalization.DateTimeStyles.AssumeUniversal |
+                            System.Globalization.DateTimeStyles.AdjustToUniversal,
+                            out var parsedCreated))
+                    {
+                        createdOn = DateTime.SpecifyKind(parsedCreated, DateTimeKind.Utc);
+                    }
 
-    private async Task SyncJobsAsync(string token, string stTenantId, DashboardSnapshot snapshot, string from, Dictionary<long, string> jobTypeMap, Dictionary<long, DateTime> lastPmByCustomer)
-    {
-        var closedStatuses = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Completed", "Canceled" };
-        int openJobs = 0, totalRecords = 0, pmJobsFound = 0, pmSkippedNoDate = 0;
-        string? continueFrom = from;
+                    var pmDate = completedOn ?? createdOn;
+                    if (pmDate == null) continue;
 
-        do
-        {
-            var json = await _client.GetJobsExportAsync(token, stTenantId, continueFrom);
-            var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
-            if (!root.TryGetProperty("data", out var data)) break;
-            foreach (var job in data.EnumerateArray())
-            {
-                totalRecords++;
-                var status = job.TryGetProperty("jobStatus", out var s) ? s.GetString() ?? "" : "";
-                if (!closedStatuses.Contains(status)) openJobs++;
-                if (!status.Equals("Completed", StringComparison.OrdinalIgnoreCase)) continue;
+                    pmFound++;
 
-                // Check if this is a PM job type
-                if (!job.TryGetProperty("jobTypeId", out var jtProp) || jtProp.ValueKind != JsonValueKind.Number) continue;
-                if (!jobTypeMap.TryGetValue(jtProp.GetInt64(), out var jobTypeName)) continue;
-                if (!PmKeywords.Any(k => jobTypeName.ToLower().Contains(k))) continue;
-
-                if (!job.TryGetProperty("customerId", out var cProp) || cProp.ValueKind != JsonValueKind.Number) continue;
-                var customerId = cProp.GetInt64();
-
-                // CRITICAL: Only use completedOn. Do NOT fall back to modifiedOn.
-                // modifiedOn reflects the last edit time, not when the PM was performed.
-                var completedOn = ParseDateTime(job, "completedOn");
-                if (completedOn == null)
-                {
-                    pmSkippedNoDate++;
-                    continue;
+                    // Keep the most recent PM date per customer
+                    if (!pmDates.TryGetValue(customerId, out var existing) || pmDate > existing)
+                        pmDates[customerId] = pmDate.Value;
                 }
 
-                pmJobsFound++;
-                if (!lastPmByCustomer.TryGetValue(customerId, out var existing) || completedOn > existing)
-                    lastPmByCustomer[customerId] = completedOn.Value;
+            } while (hasMore);
+
+            _logger.LogInformation("[Sync] tenantId={TenantId} pmFound={PmFound}", tenantId, pmFound);
+
+            // 4. Upsert PmCustomers
+            foreach (var (stCustomerId, lastPmDate) in pmDates)
+            {
+                customerNameMap.TryGetValue(stCustomerId, out var customerName);
+
+                var daysSince = (DateTime.UtcNow - lastPmDate).Days;
+                var status = daysSince >= 180 ? "Overdue"
+                           : daysSince >= 120 ? "ComingDue"
+                           : "Current";
+
+                var existing = await _db.PmCustomers
+                    .FirstOrDefaultAsync(p => p.TenantId == tenantId && p.StCustomerId == stCustomerId);
+
+                if (existing == null)
+                {
+                    _db.PmCustomers.Add(new PmCustomer
+                    {
+                        TenantId = tenantId,
+                        StCustomerId = stCustomerId,
+                        CustomerName = customerName ?? $"Customer {stCustomerId}",
+                        LastPmDate = lastPmDate,
+                        PmStatus = status,
+                        UpdatedAt = DateTime.UtcNow
+                    });
+                }
+                else
+                {
+                    existing.CustomerName = customerName ?? existing.CustomerName;
+                    existing.LastPmDate = lastPmDate;
+                    existing.PmStatus = status;
+                    existing.UpdatedAt = DateTime.UtcNow;
+                }
             }
-            var hasMore = root.TryGetProperty("hasMore", out var hm) && hm.GetBoolean();
-            continueFrom = hasMore && root.TryGetProperty("continueFrom", out var cf) ? cf.GetString() : null;
-            if (!hasMore) break;
-        } while (continueFrom != null);
 
-        _logger.LogInformation("[ST Sync] Jobs processed={Total} openJobs={Open} pmFound={PM} pmSkippedNoDate={Skipped}",
-            totalRecords, openJobs, pmJobsFound, pmSkippedNoDate);
-        snapshot.OpenJobCount = openJobs;
-    }
+            await _db.SaveChangesAsync();
 
-    private static decimal ParseDecimal(JsonElement el, string prop)
-    {
-        if (!el.TryGetProperty(prop, out var val)) return 0;
-        if (val.ValueKind == JsonValueKind.Number) return val.GetDecimal();
-        if (val.ValueKind == JsonValueKind.String) return decimal.TryParse(val.GetString(), out var d) ? d : 0;
-        return 0;
-    }
+            // Update snapshot
+            var snapshot = await _db.DashboardSnapshots.FirstOrDefaultAsync(s => s.TenantId == tenantId);
+            if (snapshot == null)
+            {
+                snapshot = new DashboardSnapshot { TenantId = tenantId };
+                _db.DashboardSnapshots.Add(snapshot);
+            }
+            snapshot.SyncedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
 
-    private static DateTime? ParseDateTime(JsonElement el, string prop)
-    {
-        if (!el.TryGetProperty(prop, out var val)) return null;
-        if (val.ValueKind == JsonValueKind.Null) return null;
-        return DateTime.TryParse(val.GetString(), null,
-            System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal,
-            out var dt) ? dt : null;
+            return new SyncResult { Success = true, SyncedAt = DateTime.UtcNow };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[Sync] Failed for tenantId={TenantId}", tenantId);
+            return new SyncResult { Success = false, Error = ex.Message };
+        }
     }
 }
 
 public class SyncResult
 {
     public bool Success { get; set; }
+    public DateTime? SyncedAt { get; set; }
     public string? Error { get; set; }
-    public DateTime SyncedAt { get; set; }
 }
