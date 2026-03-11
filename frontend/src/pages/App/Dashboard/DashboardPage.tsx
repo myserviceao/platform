@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 
-// Ã¢ÂÂÃ¢ÂÂ Types Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
+// ── Types ──────────────────────────────────────────────────────────────────
 interface ArBucket {
   bucket0_30: number
   bucket31_60: number
@@ -25,6 +25,7 @@ interface OverduePm {
   lastPmDate: string | null
   daysSince: number
 }
+
 interface ApVendorSummary {
   vendorName: string
   totalOwed: number
@@ -78,7 +79,7 @@ interface DashboardData {
   dayAfterLabel: string
 }
 
-// Ã¢ÂÂÃ¢ÂÂ Formatters Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
+// ── Formatters ─────────────────────────────────────────────────────────────
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
 }
@@ -108,7 +109,7 @@ function daysSinceStr(createdOn: string | null) {
   return Math.floor((Date.now() - new Date(createdOn).getTime()) / 86400000)
 }
 
-// Ã¢ÂÂÃ¢ÂÂ Stat Tile (Patriot-style with colored top border) Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
+// ── Stat Tile (Patriot-style with colored top border) ──────────────────────
 function StatTile({ borderColor, label, value, sub, subColor }: {
   borderColor: string
   label: string
@@ -125,7 +126,7 @@ function StatTile({ borderColor, label, value, sub, subColor }: {
   )
 }
 
-// Ã¢ÂÂÃ¢ÂÂ Main Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
+// ── Main ───────────────────────────────────────────────────────────────────
 export function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -156,7 +157,7 @@ export function DashboardPage() {
       if (!res.ok) { setError(json.error || 'Sync failed'); return }
       setData(json)
     } catch {
-      setError('Network error Ã¢ÂÂ please try again')
+      setError('Network error — please try again')
     } finally {
       setSyncing(false)
     }
@@ -219,7 +220,7 @@ export function DashboardPage() {
         </div>
       )}
 
-      {/* Ã¢ÂÂÃ¢ÂÂ Row 1: Financial KPIs (5 cards) Ã¢ÂÂÃ¢ÂÂ */}
+      {/* ── Row 1: Financial KPIs (5 cards) ── */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <StatTile
           borderColor="border-t-blue-500"
@@ -231,31 +232,31 @@ export function DashboardPage() {
           borderColor="border-t-cyan-400"
           label="Total AP"
           value={fmt(d?.totalAP ?? 0)}
-          sub={(d?.totalAP ?? 0) > 0 ? `next due ${d?.apNextDueDays ?? 0}d` : 'nothing owed'}
+          sub={(d?.totalAP ?? 0) > 0 ? `next due ${d?.apNextDueDays ?? 0}d` : 'nothing owed'}"
         />
         <StatTile
           borderColor="border-t-emerald-400"
           label="Net Position"
           value={fmt(arTotal)}
-          sub={arTotal > 0 ? `AR covers AP Ã¢ÂÂ` : 'Ã¢ÂÂ'}
+          sub={arTotal > 0 ? `AR covers AP —` : '—'}
           subColor="text-success"
         />
         <StatTile
           borderColor="border-t-green-500"
           label="Month Revenue"
           value={fmt(d?.revenueThisMonth ?? 0)}
-          sub={change ? `${change.up ? 'Ã¢ÂÂ' : 'Ã¢ÂÂ'} ${change.pct}% vs ${prevMonthName}` : `Last: ${fmtShort(d?.revenueLastMonth ?? 0)}`}
+          sub={change ? `${change.up ? '↑' : '↓'} ${change.pct}% vs ${prevMonthName}` : `Last: ${fmtShort(d?.revenueLastMonth ?? 0)}`}
           subColor={change ? (change.up ? 'text-success' : 'text-error') : undefined}
         />
         <StatTile
           borderColor="border-t-indigo-500"
           label="Forecasted Revenue"
           value={fmt(forecastedRevenue)}
-          sub={`${daysLeft}d left ÃÂ· ${d?.openWoCount ?? 0} open jobs`}
+          sub={`${daysLeft}d left · ${d?.openWoCount ?? 0} open jobs`}
         />
       </div>
 
-      {/* Ã¢ÂÂÃ¢ÂÂ Row 2: Ops KPIs (3 cards) Ã¢ÂÂÃ¢ÂÂ */}
+      {/* ── Row 2: Ops KPIs (3 cards) ── */}
       <div className="grid grid-cols-3 gap-3">
         <StatTile
           borderColor="border-t-red-500"
@@ -327,7 +328,7 @@ export function DashboardPage() {
                           ? item.techs.join(', ')
                           : <span className="text-base-content/30 italic">Unassigned</span>}
                       </td>
-                      <td className="text-sm font-mono text-primary">{item.jobNumber || 'Ã¢ÂÂ'}</td>
+                      <td className="text-sm font-mono text-primary">{item.jobNumber || '—'}</td>
                       <td className="text-sm font-medium">{item.customerName}</td>
                       <td className="text-sm text-base-content/60">{fmtTime(item.start)}</td>
                     </tr>
@@ -369,7 +370,7 @@ export function DashboardPage() {
                       return (
                         <tr key={i} className="hover:bg-base-200/40">
                           <td className="text-sm font-medium max-w-[8rem] truncate">{job.customerName}</td>
-                          <td className="text-sm font-mono text-primary text-right">{job.jobNumber || 'Ã¢ÂÂ'}</td>
+                          <td className="text-sm font-mono text-primary text-right">{job.jobNumber || '—'}</td>
                           <td className={`text-sm text-right font-medium ${age >= 90 ? 'text-error' : age >= 30 ? 'text-warning' : 'text-base-content/60'}`}>
                             {age}d
                           </td>
@@ -396,9 +397,9 @@ export function DashboardPage() {
             {aging && (
               <div className="px-4 py-3 space-y-2 border-b border-base-200">
                 {[
-                  { label: '0Ã¢ÂÂ30d',  val: aging.bucket0_30,   color: 'bg-success' },
-                  { label: '31Ã¢ÂÂ60d', val: aging.bucket31_60,  color: 'bg-warning' },
-                  { label: '61Ã¢ÂÂ90d', val: aging.bucket61_90,  color: 'bg-orange-400' },
+                  { label: '0–30d',  val: aging.bucket0_30,   color: 'bg-success' },
+                  { label: '31–60d', val: aging.bucket31_60,  color: 'bg-warning' },
+                  { label: '61–90d', val: aging.bucket61_90,  color: 'bg-orange-400' },
                   { label: '90d+',   val: aging.bucket90Plus, color: 'bg-error' },
                 ].map(({ label, val, color }) => (
                   <div key={label} className="flex items-center gap-2">
@@ -445,12 +446,13 @@ export function DashboardPage() {
           </div>
         </div>
 
-        {/* Col 3: Accounts Payable */}
+
+        {/* Accounts Payable */}
         <div className="card bg-base-100 shadow-sm">
           <div className="card-body p-0">
             <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-base-200">
               <h3 className="font-semibold text-sm text-base-content">Accounts Payable</h3>
-              <a href="/app/ap" className="text-xs text-primary hover:underline">View All \u2192</a>
+              <a href="/app/ap" className="text-xs text-primary hover:underline">View All &rarr;</a>
             </div>
             <div className="overflow-auto max-h-64">
               {apData?.byVendor && apData.byVendor.length > 0 ? (
@@ -479,7 +481,7 @@ export function DashboardPage() {
           </div>
         </div>
 
-        {/* Col 4: Overdue PMs */}
+        {/* Overdue PMs */}
         <div className="card bg-base-100 shadow-sm">
           <div className="card-body p-0">
             <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-base-200">
