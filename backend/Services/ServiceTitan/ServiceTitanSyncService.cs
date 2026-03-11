@@ -206,6 +206,52 @@ public class ServiceTitanSyncService
             }
             _logger.LogInformation("[Sync] tenantId={TenantId} locationsSynced={Count}", tenantId, locSynced);
 
+
+            // 3d. Sync Job Hold Reasons
+            int holdReasonsSynced = 0;
+            try
+            {
+                var holdRaw = await _client.GetJobHoldReasonsAsync(token, stTenantId);
+                var holdDoc = JsonDocument.Parse(holdRaw);
+                if (holdDoc.RootElement.TryGetProperty("data", out var holdArr))
+                {
+                    foreach (var hr in holdArr.EnumerateArray())
+                    {
+                        var stId = hr.GetProperty("id").GetInt64();
+                        var name = hr.TryGetProperty("name", out var nProp) ? nProp.GetString() ?? "" : "";
+                        var active = hr.TryGetProperty("active", out var aProp) && aProp.GetBoolean();
+
+                        var existing = await _db.HoldReasons
+                            .FirstOrDefaultAsync(h => h.TenantId == tenantId && h.StHoldReasonId == stId);
+
+                        if (existing == null)
+                        {
+                            _db.HoldReasons.Add(new Models.HoldReason
+                            {
+                                TenantId = tenantId,
+                                StHoldReasonId = stId,
+                                Name = name,
+                                Active = active,
+                                UpdatedAt = DateTime.UtcNow
+                            });
+                        }
+                        else
+                        {
+                            existing.Name = name;
+                            existing.Active = active;
+                            existing.UpdatedAt = DateTime.UtcNow;
+                        }
+                        holdReasonsSynced++;
+                    }
+                    await _db.SaveChangesAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[Sync] Failed to sync hold reasons for tenant {TenantId}", tenantId);
+            }
+            _logger.LogInformation("[Sync] tenantId={TenantId} holdReasonsSynced={Count}", tenantId, holdReasonsSynced);
+
             // 4. Export all Jobs
             var pmDates = new Dictionary<long, DateTime>();
             int pmFound = 0;
