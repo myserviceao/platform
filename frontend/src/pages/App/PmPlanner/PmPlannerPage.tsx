@@ -10,6 +10,8 @@ interface ClusterCustomer {
   pmStatus: string
   lastPmDate: string | null
   daysSince: number
+  phone: string | null
+  email: string | null
 }
 
 interface Cluster {
@@ -39,6 +41,7 @@ export function PmPlannerPage() {
   const [geocodeMsg, setGeocodeMsg] = useState('')
   const [radius, setRadius] = useState(10)
   const [expandedCluster, setExpandedCluster] = useState<number | null>(null)
+  const [selectedCustomer, setSelectedCustomer] = useState<ClusterCustomer | null>(null)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -118,7 +121,7 @@ export function PmPlannerPage() {
         <div className="rounded-box border border-base-content/10 bg-base-100 p-3">
           <div className="text-xs text-base-content/50 mb-1">Drive radius</div>
           <div className="flex gap-1">
-            {[10, 30, 60].map(r => (
+            {[5, 10, 30, 60].map(r => (
               <button
                 key={r}
                 onClick={() => setRadius(r)}
@@ -180,11 +183,12 @@ export function PmPlannerPage() {
                             <th>Address</th>
                             <th>Status</th>
                             <th>Days Since PM</th>
+                            <th></th>
                           </tr>
                         </thead>
                         <tbody>
                           {cluster.customers.map((c, i) => (
-                            <tr key={i} className="row-hover">
+                            <tr key={i} className="row-hover cursor-pointer" onClick={() => setSelectedCustomer(selectedCustomer?.stCustomerId === c.stCustomerId ? null : c)}>
                               <td className="font-medium text-base-content text-sm">{c.customerName}</td>
                               <td className="text-xs text-base-content/60">{c.address}</td>
                               <td>
@@ -193,6 +197,12 @@ export function PmPlannerPage() {
                                 </span>
                               </td>
                               <td className="text-sm text-base-content/60">{c.pmStatus === 'NoPm' ? 'Never' : `${c.daysSince}d`}</td>
+                              <td className="text-right">
+                                <div className="flex gap-1 justify-end">
+                                  {c.phone && <span className="icon-[tabler--phone] size-3.5 text-success" />}
+                                  {c.email && <span className="icon-[tabler--mail] size-3.5 text-primary" />}
+                                </div>
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -244,6 +254,95 @@ export function PmPlannerPage() {
           )}
         </div>
       )}
+
+      {/* Customer Card */}
+      {selectedCustomer && (
+        <div className="fixed bottom-0 right-0 w-full lg:w-[28rem] z-40 p-4">
+          <div className="rounded-box border border-primary/30 bg-base-100 shadow-xl overflow-hidden">
+            <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-base-content/10">
+              <div className="flex items-center gap-3">
+                <div className="avatar avatar-placeholder">
+                  <div className="bg-primary/20 text-primary rounded-full size-10 text-sm font-semibold">
+                    {selectedCustomer.customerName.charAt(0).toUpperCase()}
+                  </div>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-base-content">{selectedCustomer.customerName}</h3>
+                  <p className="text-xs text-base-content/50">{selectedCustomer.address}</p>
+                </div>
+              </div>
+              <button onClick={() => setSelectedCustomer(null)} className="btn btn-ghost btn-xs btn-circle">
+                <span className="icon-[tabler--x] size-4" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-3">
+              <div className="grid grid-cols-3 gap-3 text-center">
+                <div>
+                  <div className="text-xs text-base-content/50">Status</div>
+                  <span className={`badge badge-soft badge-sm mt-1 ${selectedCustomer.pmStatus === 'Overdue' ? 'badge-error' : selectedCustomer.pmStatus === 'NoPm' ? 'badge-ghost' : 'badge-warning'}`}>
+                    {selectedCustomer.pmStatus === 'ComingDue' ? 'Coming Due' : selectedCustomer.pmStatus === 'NoPm' ? 'No PM' : selectedCustomer.pmStatus}
+                  </span>
+                </div>
+                <div>
+                  <div className="text-xs text-base-content/50">Last PM</div>
+                  <div className="text-sm font-medium text-base-content mt-1">{selectedCustomer.pmStatus === 'NoPm' ? 'Never' : `${selectedCustomer.daysSince}d ago`}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-base-content/50">Location</div>
+                  <div className="text-sm font-medium text-base-content mt-1 truncate">{selectedCustomer.locationName || 'Primary'}</div>
+                </div>
+              </div>
+
+              {selectedCustomer.phone && (
+                <div className="flex items-center gap-2 text-sm text-base-content/70">
+                  <span className="icon-[tabler--phone] size-4 text-success" />
+                  {selectedCustomer.phone}
+                </div>
+              )}
+              {selectedCustomer.email && (
+                <div className="flex items-center gap-2 text-sm text-base-content/70">
+                  <span className="icon-[tabler--mail] size-4 text-primary" />
+                  {selectedCustomer.email}
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-1">
+                {selectedCustomer.email && (
+                  <a
+                    href={`mailto:${selectedCustomer.email}?subject=${encodeURIComponent(
+                      selectedCustomer.pmStatus === 'NoPm'
+                        ? 'Schedule Your First HVAC Maintenance'
+                        : 'Your HVAC Maintenance is ' + (selectedCustomer.pmStatus === 'Overdue' ? 'Overdue' : 'Coming Due')
+                    )}&body=${encodeURIComponent(
+                      selectedCustomer.pmStatus === 'NoPm'
+                        ? `Hi ${selectedCustomer.customerName.split(' ')[0]},\n\nWe noticed that we don't have a preventive maintenance visit on record for your HVAC system. Regular maintenance helps prevent unexpected breakdowns, improves energy efficiency, and extends the life of your equipment.\n\nWe'd love to get you started with a maintenance plan. Please let us know a good time to schedule your first visit!`
+                        : `Hi ${selectedCustomer.customerName.split(' ')[0]},\n\nThis is a friendly reminder that your preventive maintenance is ${selectedCustomer.pmStatus === 'Overdue' ? 'overdue' : 'coming due'}. It has been ${selectedCustomer.daysSince} days since your last service.\n\nRegular maintenance is essential for keeping your HVAC system running efficiently. We'd love to get you on the schedule at a time that works for you.\n\nPlease reply or give us a call to book your appointment!`
+                    )}`}
+                    className="btn btn-primary btn-sm flex-1 gap-1"
+                  >
+                    <span className="icon-[tabler--mail] size-4" />
+                    Send PM Email
+                  </a>
+                )}
+                {selectedCustomer.phone && (
+                  <a
+                    href={`sms:${selectedCustomer.phone}`}
+                    className="btn btn-success btn-sm gap-1"
+                  >
+                    <span className="icon-[tabler--message] size-4" />
+                    Text
+                  </a>
+                )}
+                {!selectedCustomer.email && !selectedCustomer.phone && (
+                  <span className="text-xs text-base-content/40">No contact info available</span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }
