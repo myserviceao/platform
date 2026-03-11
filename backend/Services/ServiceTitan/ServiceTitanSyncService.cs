@@ -177,7 +177,9 @@ public class ServiceTitanSyncService
 
             _logger.LogInformation("[Sync] tenantId={TenantId} pmFound={PmFound} uniquePmCustomers={Count}", tenantId, pmFound, pmDates.Count);
 
-}            // 4c. Resolve hold reasons using the jobs LIST endpoint (not export)
+}
+
+            // 4c. Resolve hold reasons using the jobs LIST endpoint (not export)
             // The list endpoint (GET /jobs) returns holdReasonId, the export doesn't
             var unresolvedHoldJobs = await _db.Jobs
                 .Where(j => j.TenantId == tenantId && j.Status == "Hold" && j.HoldReasonName == null)
