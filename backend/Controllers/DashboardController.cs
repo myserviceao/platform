@@ -269,6 +269,17 @@ public class DashboardController : ControllerBase
         return Content(raw, "application/json");
     }
 
+    [HttpGet("appointment/{apptId}")]
+    public async Task<IActionResult> GetAppointment(long apptId)
+    {
+        var tenantId = HttpContext.Session.GetInt32("tenantId");
+        if (tenantId == null) return Unauthorized();
+        var raw = await _sync.GetAppointmentRawAsync(tenantId.Value, apptId);
+        return Content(raw, "application/json");
+    }
+
+
+
 
 
 
