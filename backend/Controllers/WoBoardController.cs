@@ -112,10 +112,9 @@ public class WoBoardController : ControllerBase
         });
     }
 
-    /// <summary>
+        /// <summary>
     /// GET /api/wo-board/holds
-    /// Returns on-hold jobs grouped by hold reason for the Hold Board.
-    /// Each tenant's hold reasons from ServiceTitan become columns.
+    /// Returns on-hold jobs with hold reasons for the Hold Board.
     /// </summary>
     [HttpGet("holds")]
     public async Task<IActionResult> GetHoldBoard()
@@ -123,7 +122,6 @@ public class WoBoardController : ControllerBase
         var tenantId = HttpContext.Session.GetInt32("tenantId");
         if (tenantId == null) return Unauthorized();
 
-        // Get all on-hold jobs
         var holdJobs = await _db.Jobs
             .Where(j => j.TenantId == tenantId.Value && j.Status == "Hold")
             .OrderByDescending(j => j.CreatedOn)
@@ -144,46 +142,61 @@ public class WoBoardController : ControllerBase
             })
             .ToListAsync();
 
-        // Get hold reasons for this tenant
         var holdReasons = await _db.HoldReasons
             .Where(h => h.TenantId == tenantId.Value && h.Active)
             .OrderBy(h => h.Name)
             .Select(h => h.Name)
             .ToListAsync();
 
+        // Build columns from hold reasons
         var columns = new List<object>();
         var assignedIds = new HashSet<int>();
 
-        if (holdReasons.Count > 0)
+        foreach (var reason in holdReasons)
         {
-            foreach (var reason in holdReasons)
-            {
-                var reasonJobs = holdJobs
-                    .Where(j => string.Equals(j.HoldReasonName, reason, StringComparison.OrdinalIgnoreCase))
-                    .ToList();
-                foreach (var rj in reasonJobs) assignedIds.Add(rj.Id);
-                columns.Add(new { key = reason, label = reason, count = reasonJobs.Count, jobs = reasonJobs });
-            }
+            var reasonJobs = holdJobs
+                .Where(j => string.Equals(j.HoldReasonName, reason, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            foreach (var rj in reasonJobs) assignedIds.Add(rj.Id);
+            columns.Add(new { key = reason, label = reason, count = reasonJobs.Count, jobs = reasonJobs });
+        }
 
-            var unmatched = holdJobs.Where(j => !assignedIds.Contains(j.Id)).ToList();
-            if (unmatched.Count > 0)
-            {
-                columns.Add(new { key = "unassigned", label = "Unassigned", count = unmatched.Count, jobs = unmatched });
-            }
-        }
-        else
-        {
-            // No hold reasons synced - show all in one column
-            columns.Add(new { key = "all", label = "On Hold", count = holdJobs.Count, jobs = holdJobs });
-        }
+        var unmatched = holdJobs.Where(j => !assignedIds.Contains(j.Id)).ToList();
+        if (unmatched.Count > 0)
+            columns.Add(new { key = "unassigned", label = "Unassigned", count = unmatched.Count, jobs = unmatched });
 
         return Ok(new
         {
             totalHolds = holdJobs.Count,
             holdReasonCount = holdReasons.Count,
             totalAmount = holdJobs.Sum(j => j.TotalAmount),
+            holdReasons,
             columns
         });
+    }
+
+    /// <summary>
+    /// PUT /api/wo-board/holds/{jobId}/reason
+    /// Manually assign a hold reason to a job.
+    /// </summary>
+    [HttpPut("holds/{jobId}/reason")]
+    public async Task<IActionResult> SetHoldReason(int jobId, [FromBody] SetHoldReasonRequest req)
+    {
+        var tenantId = HttpContext.Session.GetInt32("tenantId");
+        if (tenantId == null) return Unauthorized();
+
+        var job = await _db.Jobs.FirstOrDefaultAsync(j => j.Id == jobId && j.TenantId == tenantId.Value);
+        if (job == null) return NotFound();
+
+        job.HoldReasonName = string.IsNullOrWhiteSpace(req.Reason) ? null : req.Reason;
+        await _db.SaveChangesAsync();
+
+        return Ok(new { job.Id, job.JobNumber, holdReasonName = job.HoldReasonName });
+    }
+
+    public class SetHoldReasonRequest
+    {
+        public string? Reason { get; set; }
     }
 
 }
