@@ -239,7 +239,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <img
               src={user.tenant.logoUrl}
               alt={user.tenant.name}
-              className="w-16 h-16 rounded-full object-cover"
+              className="max-h-16 max-w-[10rem] object-contain"
             />
           ) : (
             <div className="avatar placeholder">
