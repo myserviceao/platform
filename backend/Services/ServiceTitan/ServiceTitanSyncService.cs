@@ -125,6 +125,87 @@ public class ServiceTitanSyncService
             }
             _logger.LogInformation("[Sync] tenantId={TenantId} contactsSynced={Count}", tenantId, contactsSynced);
 
+
+            // 3c. Sync Customer Locations (addresses for PM planning)
+            string? locContinue = null;
+            bool locHasMore = true;
+            int locSynced = 0;
+            while (locHasMore)
+            {
+                var raw = await _client.GetLocationsExportAsync(token, stTenantId, locContinue);
+                var doc = JsonDocument.Parse(raw);
+                var root = doc.RootElement;
+                locHasMore = root.TryGetProperty("hasMore", out var lhm) && lhm.GetBoolean();
+                locContinue = root.TryGetProperty("continueFrom", out var lcf) ? lcf.GetString() : null;
+
+                if (!root.TryGetProperty("data", out var data)) break;
+
+                foreach (var loc in data.EnumerateArray())
+                {
+                    if (loc.TryGetProperty("active", out var activeProp) && !activeProp.GetBoolean())
+                        continue;
+
+                    var stLocId = loc.GetProperty("id").GetInt64();
+                    long customerId = 0;
+                    if (loc.TryGetProperty("customerId", out var cidProp))
+                        customerId = cidProp.GetInt64();
+
+                    string locName = "";
+                    if (loc.TryGetProperty("name", out var nameProp) && nameProp.ValueKind == JsonValueKind.String)
+                        locName = nameProp.GetString() ?? "";
+
+                    string street = "", city = "", state = "", zip = "";
+                    if (loc.TryGetProperty("address", out var addrObj) && addrObj.ValueKind == JsonValueKind.Object)
+                    {
+                        if (addrObj.TryGetProperty("street", out var sProp)) street = sProp.GetString() ?? "";
+                        if (addrObj.TryGetProperty("city", out var cProp)) city = cProp.GetString() ?? "";
+                        if (addrObj.TryGetProperty("state", out var stProp)) state = stProp.GetString() ?? "";
+                        if (addrObj.TryGetProperty("zip", out var zProp)) zip = zProp.GetString() ?? "";
+                    }
+
+                    if (string.IsNullOrWhiteSpace(street)) continue;
+
+                    customerNameMap.TryGetValue(customerId, out var custName);
+
+                    var existing = await _db.CustomerLocations
+                        .FirstOrDefaultAsync(l => l.TenantId == tenantId && l.StLocationId == stLocId);
+
+                    if (existing == null)
+                    {
+                        _db.CustomerLocations.Add(new Models.CustomerLocation
+                        {
+                            TenantId = tenantId,
+                            StLocationId = stLocId,
+                            StCustomerId = customerId,
+                            CustomerName = custName ?? locName,
+                            LocationName = locName,
+                            Street = street,
+                            City = city,
+                            State = state,
+                            Zip = zip,
+                            UpdatedAt = DateTime.UtcNow
+                        });
+                    }
+                    else
+                    {
+                        existing.StCustomerId = customerId;
+                        existing.CustomerName = custName ?? existing.CustomerName;
+                        existing.LocationName = locName;
+                        existing.Street = street;
+                        existing.City = city;
+                        existing.State = state;
+                        existing.Zip = zip;
+                        existing.UpdatedAt = DateTime.UtcNow;
+                    }
+
+                    locSynced++;
+                }
+
+                await _db.SaveChangesAsync();
+                if (!locHasMore || locContinue == null) break;
+            }
+            _logger.LogInformation("[Sync] tenantId={TenantId} locationsSynced={Count}", tenantId, locSynced);
+
             // 4. Export all Jobs
             var pmDates = new Dictionary<long, DateTime>();
             int pmFound = 0;
