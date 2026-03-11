@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, useCallback } from 'react'
+import { useState, useEffect, createContext, useContext, useCallback, useRef } from 'react'
 
 export type Theme = 'dark' | 'light' | 'corporate' | 'gourmet' | 'luxury' | 'soft' | 'shadcn' | 'slack' | 'spotify' | 'vscode' | 'claude' | 'pastel' | 'valorant' | 'ghibli' | 'mintlify' | 'perplexity' | 'black'
 
@@ -19,6 +19,16 @@ export function useThemeProvider(initialTheme: Theme | null): ThemeContextType {
   const [theme, setThemeState] = useState<Theme>(() => {
     return (initialTheme as Theme) || 'dark'
   })
+
+  // When initialTheme changes (e.g. auth loads), update theme
+  const hasLoadedFromAuth = useRef(false)
+  useEffect(() => {
+    if (initialTheme && !hasLoadedFromAuth.current) {
+      hasLoadedFromAuth.current = true
+      setThemeState(initialTheme)
+      document.documentElement.setAttribute('data-theme', initialTheme)
+    }
+  }, [initialTheme])
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
