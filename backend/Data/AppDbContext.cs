@@ -19,6 +19,7 @@ public class AppDbContext : DbContext
     public DbSet<Vendor> Vendors => Set<Vendor>();
     public DbSet<ApBill> ApBills => Set<ApBill>();
     public DbSet<CustomerLocation> CustomerLocations => Set<CustomerLocation>();
+    public DbSet<HoldReason> HoldReasons => Set<HoldReason>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -122,6 +123,16 @@ public class AppDbContext : DbContext
              .WithMany()
              .HasForeignKey(v => v.TenantId);
             e.Property(v => v.Name).IsRequired().HasMaxLength(200);
+        });
+
+        // HoldReason
+        modelBuilder.Entity<HoldReason>(e =>
+        {
+            e.HasKey(h => h.Id);
+            e.HasIndex(h => new { h.TenantId, h.StHoldReasonId }).IsUnique();
+            e.HasOne(h => h.Tenant)
+             .WithMany()
+             .HasForeignKey(h => h.TenantId);
         });
 
         // CustomerLocation
