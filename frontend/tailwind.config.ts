@@ -16,6 +16,8 @@ export default {
   plugins: [
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     require('flyonui'),
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('flyonui/plugin'),
   ],
   flyonui: {
     themes: ['dark', 'light', 'corporate'],
