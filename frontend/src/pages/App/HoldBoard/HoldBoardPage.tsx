@@ -33,7 +33,7 @@ function fmt(n: number) {
 }
 
 async function assignReason(jobId: number, reason: string, onDone: () => void) {
-  await fetch(\`/api/wo-board/holds/\${jobId}/reason\`, {
+  await fetch(`/api/wo-board/holds/${jobId}/reason`, {
     method: 'PUT',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
@@ -63,8 +63,6 @@ export function HoldBoardPage() {
   }
 
   const q = search.toLowerCase()
-
-  // Color rotation for hold reason columns
   const holdColors = ['error', 'warning', 'info', 'primary', 'success', 'secondary']
 
   return (
@@ -74,8 +72,8 @@ export function HoldBoardPage() {
           <h1 className="text-xl font-semibold text-base-content">Hold Board</h1>
           <p className="text-sm text-base-content/60 mt-0.5">
             {data.totalHolds} jobs on hold
-            {data.holdReasonCount > 0 && ` across ${data.holdReasonCount} hold reasons`}
-            {data.totalAmount > 0 && ` \u00b7 ${fmt(data.totalAmount)} total`}
+            {data.holdReasonCount > 0 && <span> across {data.holdReasonCount} hold reasons</span>}
+            {data.totalAmount > 0 && <span> &middot; {fmt(data.totalAmount)} total</span>}
           </p>
         </div>
         <div className="input input-sm max-w-xs">
@@ -99,25 +97,20 @@ export function HoldBoardPage() {
         <div className="flex gap-4 overflow-x-auto pb-2 items-start">
           {data.columns.map((col, colIdx) => {
             const color = holdColors[colIdx % holdColors.length]
-            const borderClass = `border-t-${color}`
-            const badgeClass = `badge-${color}`
-
             const filteredJobs = q
               ? col.jobs.filter(j => j.customerName.toLowerCase().includes(q) || j.jobNumber.includes(q))
               : col.jobs
 
             return (
-              <div key={col.key} className={`rounded-box border border-base-content/10 bg-base-100 border-t-[3px] ${borderClass} flex flex-col min-w-[280px] w-[280px] xl:flex-1 xl:w-auto xl:min-w-0 shrink-0`}>
-                {/* Column header */}
+              <div key={col.key} className={`rounded-box border border-base-content/10 bg-base-100 border-t-[3px] border-t-${color} flex flex-col min-w-[280px] w-[280px] xl:flex-1 xl:w-auto xl:min-w-0 shrink-0`}>
                 <div className="flex items-center justify-between px-4 py-3 border-b border-base-content/10">
                   <div className="flex items-center gap-2">
                     <span className="icon-[tabler--hand-stop] size-4 text-base-content/40" />
                     <h3 className="font-semibold text-sm text-base-content">{col.label}</h3>
-                    <span className={`badge badge-sm ${badgeClass}`}>{filteredJobs.length}</span>
+                    <span className={`badge badge-sm badge-${color}`}>{filteredJobs.length}</span>
                   </div>
                 </div>
 
-                {/* Cards */}
                 <div className="p-2 space-y-2 max-h-[calc(100vh-14rem)] overflow-y-auto">
                   {filteredJobs.length === 0 ? (
                     <div className="text-center py-6 text-base-content/30 text-xs">
@@ -146,7 +139,7 @@ export function HoldBoardPage() {
                             {job.daysSince}d
                           </span>
                         </div>
-                        {data?.holdReasons && data.holdReasons.length > 0 && (
+                        {data.holdReasons && data.holdReasons.length > 0 && (
                           <select
                             className="select select-xs w-full text-xs"
                             value={job.holdReasonName || ''}
