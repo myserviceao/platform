@@ -12,6 +12,10 @@ public class AppDbContext : DbContext
     public DbSet<DashboardSnapshot> DashboardSnapshots => Set<DashboardSnapshot>();
     public DbSet<PmCustomer> PmCustomers => Set<PmCustomer>();
     public DbSet<Customer> Customers => Set<Customer>();
+    public DbSet<Invoice> Invoices => Set<Invoice>();
+    public DbSet<Job> Jobs => Set<Job>();
+    public DbSet<Appointment> Appointments => Set<Appointment>();
+    public DbSet<AppointmentTechnician> AppointmentTechnicians => Set<AppointmentTechnician>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -63,6 +67,49 @@ public class AppDbContext : DbContext
             e.HasOne(p => p.Tenant)
              .WithMany()
              .HasForeignKey(p => p.TenantId);
+        });
+
+        // Invoice - one row per (tenant, ST invoice)
+        modelBuilder.Entity<Invoice>(e =>
+        {
+            e.HasKey(i => i.Id);
+            e.HasIndex(i => new { i.TenantId, i.StInvoiceId }).IsUnique();
+            e.HasOne(i => i.Tenant)
+             .WithMany()
+             .HasForeignKey(i => i.TenantId);
+            e.Property(i => i.TotalAmount).HasColumnType("numeric(18,2)");
+            e.Property(i => i.BalanceRemaining).HasColumnType("numeric(18,2)");
+        });
+
+        // Job - one row per (tenant, ST job)
+        modelBuilder.Entity<Job>(e =>
+        {
+            e.HasKey(j => j.Id);
+            e.HasIndex(j => new { j.TenantId, j.StJobId }).IsUnique();
+            e.HasOne(j => j.Tenant)
+             .WithMany()
+             .HasForeignKey(j => j.TenantId);
+            e.Property(j => j.TotalAmount).HasColumnType("numeric(18,2)");
+        });
+
+        // Appointment - one row per (tenant, ST appointment)
+        modelBuilder.Entity<Appointment>(e =>
+        {
+            e.HasKey(a => a.Id);
+            e.HasIndex(a => new { a.TenantId, a.StAppointmentId }).IsUnique();
+            e.HasOne(a => a.Tenant)
+             .WithMany()
+             .HasForeignKey(a => a.TenantId);
+            e.HasMany(a => a.Technicians)
+             .WithOne(t => t.Appointment)
+             .HasForeignKey(t => t.AppointmentId)
+             .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // AppointmentTechnician
+        modelBuilder.Entity<AppointmentTechnician>(e =>
+        {
+            e.HasKey(t => t.Id);
         });
     }
 }
