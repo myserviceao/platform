@@ -1,90 +1,144 @@
 import { useState, useEffect, useCallback } from 'react'
 
-interface DashboardSnapshot {
+// ── Types ──────────────────────────────────────────────────────────────────
+interface ArBucket {
+  bucket0_30: number
+  bucket31_60: number
+  bucket61_90: number
+  bucket90Plus: number
+}
+interface ArCustomer {
+  customerName: string
+  totalOwed: number
+  oldestInvoiceDays: number
+}
+interface OpenJob {
+  stJobId: number
+  jobNumber: string
+  customerName: string
+  status: string
+  totalAmount: number
+  createdOn: string | null
+}
+interface OverduePm {
+  customerName: string
+  lastPmDate: string | null
+  daysSince: number
+}
+interface ScheduleItem {
+  jobNumber: string
+  customerName: string
+  start: string  // UTC ISO string
+  techs: string[]
+}
+interface DaySchedule {
+  count: number
+  items: ScheduleItem[]
+}
+
+interface DashboardData {
   synced: boolean
+  snapshotTakenAt: string | null
+  totalAR: number
+  oldestWoDays: number
+  aRaging: ArBucket
+  aRbyCustomer: ArCustomer[]
   revenueThisMonth: number
   revenueLastMonth: number
-  accountsReceivable: number
-  unpaidInvoiceCount: number
-  openJobCount: number
+  daysInMonth: number
+  daysElapsed: number
+  openWorkOrders: OpenJob[]
+  openWoCount: number
+  overduePms: OverduePm[]
   overduePmCount: number
-  snapshotTakenAt: string | null
+  scheduledToday: DaySchedule
+  scheduledTomorrow: DaySchedule
+  scheduledDayAfter: DaySchedule
+  todayLabel: string
+  tomorrowLabel: string
+  dayAfterLabel: string
 }
 
+// ── Formatters ─────────────────────────────────────────────────────────────
 function fmt(n: number) {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  }).format(n)
+  if (n >= 1000000) return `$${(n / 1000000).toFixed(1)}M`
+  if (n >= 1000) return `$${(n / 1000).toFixed(1)}k`
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
+}
+function fmtFull(n: number) {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(n)
+}
+function revPct(curr: number, prev: number) {
+  if (prev === 0) return null
+  const p = ((curr - prev) / prev) * 100
+  return { pct: Math.abs(p).toFixed(1), up: p >= 0 }
+}
+function agePct(bucket: number, total: number) {
+  return total === 0 ? 0 : Math.round((bucket / total) * 100)
+}
+function fmtTime(utcIso: string) {
+  try {
+    return new Date(utcIso).toLocaleTimeString('en-US', {
+      hour: 'numeric', minute: '2-digit', hour12: true,
+      timeZone: 'America/Chicago'
+    })
+  } catch { return '' }
+}
+function daysSince(createdOn: string | null) {
+  if (!createdOn) return 0
+  return Math.floor((Date.now() - new Date(createdOn).getTime()) / 86400000)
 }
 
-function revChange(current: number, previous: number) {
-  if (previous === 0) return null
-  const pct = ((current - previous) / previous) * 100
-  return { pct: Math.abs(pct).toFixed(1), up: pct >= 0 }
-}
-
-interface KpiCardProps {
-  title: string
-  value: string
-  sub?: string
+// ── Stat Card ──────────────────────────────────────────────────────────────
+function StatCard({ title, value, sub, color = 'primary', trend }: {
+  title: string; value: string; sub?: string
+  color?: 'primary' | 'success' | 'warning' | 'error'
   trend?: { pct: string; up: boolean } | null
-  alert?: boolean
-  icon: string
-}
-
-function KpiCard({ title, value, sub, trend, alert, icon }: KpiCardProps) {
+}) {
+  const borderColor = { primary: 'border-t-primary', success: 'border-t-success', warning: 'border-t-warning', error: 'border-t-error' }[color]
+  const valColor = color === 'error' ? 'text-error' : color === 'warning' ? 'text-warning' : color === 'success' ? 'text-success' : 'text-base-content'
   return (
-    <div className={`card shadow-sm ${alert ? 'border border-error/30 bg-error/5' : 'bg-base-100'}`}>
-      <div className="card-body gap-3 p-5">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-base-content/50 uppercase tracking-wider">{title}</span>
-          <div className={`avatar avatar-placeholder`}>
-            <div className={`rounded-field size-9 ${alert ? 'bg-error/15 text-error' : 'bg-primary/10 text-primary'}`}>
-              <span className={`${icon} size-4.5`} />
-            </div>
-          </div>
-        </div>
-        <div className={`text-3xl font-bold ${alert ? 'text-error' : 'text-base-content'}`}>{value}</div>
+    <div className={`card bg-base-100 border-t-2 ${borderColor} shadow-sm`}>
+      <div className="card-body p-4 gap-1">
+        <p className="text-xs font-medium text-base-content/50 uppercase tracking-wider">{title}</p>
+        <p className={`text-2xl font-bold ${valColor}`}>{value}</p>
         {trend && (
-          <span className={`text-xs font-medium ${trend.up ? 'text-success' : 'text-error'}`}>
-            <span className={`icon-[tabler--trending-${trend.up ? 'up' : 'down'}] size-3.5 inline me-0.5`} />
+          <p className={`text-xs font-medium ${trend.up ? 'text-success' : 'text-error'}`}>
+            <span className={`icon-[tabler--trending-${trend.up ? 'up' : 'down'}] size-3 inline me-0.5`} />
             {trend.pct}% vs last month
-          </span>
+          </p>
         )}
-        {sub && <span className="text-xs text-base-content/40">{sub}</span>}
+        {!trend && sub && <p className="text-xs text-base-content/40">{sub}</p>}
       </div>
     </div>
   )
 }
 
+// ── Main ───────────────────────────────────────────────────────────────────
 export function DashboardPage() {
-  const [data, setData] = useState<DashboardSnapshot | null>(null)
+  const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState('')
+  const [schedTab, setSchedTab] = useState<'today' | 'tomorrow' | 'dayafter'>('today')
 
-  const fetchSnapshot = useCallback(async () => {
-    const res = await fetch('/api/dashboard/snapshot', { credentials: 'include' })
+  const fetchDashboard = useCallback(async () => {
+    const res = await fetch('/api/dashboard', { credentials: 'include' })
     if (res.ok) setData(await res.json())
   }, [])
 
   useEffect(() => {
-    fetchSnapshot().finally(() => setLoading(false))
-  }, [fetchSnapshot])
+    fetchDashboard().finally(() => setLoading(false))
+  }, [fetchDashboard])
 
   const handleSync = async () => {
     setSyncing(true)
     setError('')
     try {
-      const res = await fetch('/api/dashboard/sync', {
-        method: 'POST',
-        credentials: 'include',
-      })
+      const res = await fetch('/api/dashboard/sync', { method: 'POST', credentials: 'include' })
       const json = await res.json()
-      if (!res.ok) setError(json.error || 'Sync failed')
-      else setData(json)
+      if (!res.ok) { setError(json.error || 'Sync failed'); return }
+      setData(json)
     } catch {
       setError('Network error — please try again')
     } finally {
@@ -100,27 +154,31 @@ export function DashboardPage() {
     )
   }
 
-  const change = data ? revChange(data.revenueThisMonth, data.revenueLastMonth) : null
+  const d = data
+  const change = d ? revPct(d.revenueThisMonth, d.revenueLastMonth) : null
+  const arTotal = d?.totalAR ?? 0
+  const aging = d?.aRaging
+
+  const activeSchedule: DaySchedule | null =
+    schedTab === 'today'    ? (d?.scheduledToday    ?? null) :
+    schedTab === 'tomorrow' ? (d?.scheduledTomorrow ?? null) :
+                              (d?.scheduledDayAfter ?? null)
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 py-2">
+    <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-base-content text-2xl font-semibold">Dashboard</h1>
-          {data?.snapshotTakenAt && (
-            <p className="text-xs text-base-content/40 mt-1">
-              Last synced {new Date(data.snapshotTakenAt).toLocaleString()}
+          <h1 className="text-xl font-semibold text-base-content">Dashboard</h1>
+          {d?.snapshotTakenAt && (
+            <p className="text-xs text-base-content/40 mt-0.5">
+              Last synced {new Date(d.snapshotTakenAt).toLocaleString()}
             </p>
           )}
         </div>
-        <button
-          onClick={handleSync}
-          disabled={syncing}
-          className="btn btn-primary btn-sm gap-2"
-        >
+        <button onClick={handleSync} disabled={syncing} className="btn btn-primary btn-sm gap-1.5">
           <span className={`icon-[tabler--refresh] size-4 ${syncing ? 'animate-spin' : ''}`} />
-          {syncing ? 'Syncing...' : 'Sync Now'}
+          {syncing ? 'Syncing...' : 'Sync Data'}
         </button>
       </div>
 
@@ -132,51 +190,247 @@ export function DashboardPage() {
         </div>
       )}
 
-      {/* Not connected banner */}
-      {!data?.synced && (
-        <div className="alert bg-primary/10 border border-primary/20 text-primary-content">
+      {/* Not synced yet */}
+      {!d?.synced && (
+        <div className="alert bg-primary/10 border border-primary/20">
           <span className="icon-[tabler--plug] size-5 text-primary shrink-0" />
           <div className="flex-1">
             <p className="font-medium text-base-content">Connect ServiceTitan to see live data</p>
-            <p className="text-base-content/60 text-sm">
-              Your dashboard will populate automatically after connecting.
-            </p>
+            <p className="text-base-content/60 text-sm">Hit Sync Data after connecting to populate your dashboard.</p>
           </div>
-          <a href="/app/servicetitan" className="btn btn-primary btn-sm whitespace-nowrap">
-            Connect →
-          </a>
+          <a href="/app/servicetitan" className="btn btn-primary btn-sm whitespace-nowrap">Connect &#x2192;</a>
         </div>
       )}
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <KpiCard
-          title="Revenue This Month"
-          value={fmt(data?.revenueThisMonth ?? 0)}
+      {/* Top stat cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatCard
+          title="Total AR"
+          value={fmt(arTotal)}
+          sub={arTotal > 0 ? `${d?.aRbyCustomer?.length ?? 0} customers` : 'All paid up'}
+          color={arTotal > 0 ? 'warning' : 'success'}
+        />
+        <StatCard
+          title="Month Revenue"
+          value={fmt(d?.revenueThisMonth ?? 0)}
           trend={change}
-          sub={`Last month: ${fmt(data?.revenueLastMonth ?? 0)}`}
-          icon="icon-[tabler--currency-dollar]"
+          sub={`Last month: ${fmt(d?.revenueLastMonth ?? 0)}`}
+          color="success"
         />
-        <KpiCard
-          title="Accounts Receivable"
-          value={fmt(data?.accountsReceivable ?? 0)}
-          sub={`${data?.unpaidInvoiceCount ?? 0} unpaid invoice${(data?.unpaidInvoiceCount ?? 0) !== 1 ? 's' : ''}`}
-          alert={(data?.accountsReceivable ?? 0) > 0}
-          icon="icon-[tabler--receipt]"
-        />
-        <KpiCard
+        <StatCard
           title="Open Work Orders"
-          value={(data?.openJobCount ?? 0).toString()}
-          sub="Jobs not yet completed or canceled"
-          icon="icon-[tabler--clipboard-list]"
+          value={(d?.openWoCount ?? 0).toString()}
+          sub={d?.oldestWoDays ? `oldest ${d.oldestWoDays}d open` : 'Active / Scheduled / Hold'}
+          color="primary"
         />
-        <KpiCard
+        <StatCard
           title="Overdue PMs"
-          value={(data?.overduePmCount ?? 0).toString()}
-          sub="Recurring services past due date"
-          alert={(data?.overduePmCount ?? 0) > 0}
-          icon="icon-[tabler--calendar-x]"
+          value={(d?.overduePmCount ?? 0).toString()}
+          sub={(d?.overduePmCount ?? 0) > 0 ? `${d!.overduePmCount} customers past due` : 'All current'}
+          color={(d?.overduePmCount ?? 0) > 0 ? 'error' : 'success'}
         />
+      </div>
+
+      {/* Schedule Strip */}
+      <div className="card bg-base-100 shadow-sm">
+        <div className="card-body p-0">
+          <div className="flex border-b border-base-200 px-4 pt-3 gap-1">
+            {(['today', 'tomorrow', 'dayafter'] as const).map((tab) => {
+              const label = tab === 'today' ? (d?.todayLabel ?? 'Today') :
+                            tab === 'tomorrow' ? (d?.tomorrowLabel ?? 'Tomorrow') :
+                            (d?.dayAfterLabel ?? 'Day After')
+              const count = tab === 'today'    ? d?.scheduledToday?.count :
+                            tab === 'tomorrow' ? d?.scheduledTomorrow?.count :
+                            d?.scheduledDayAfter?.count
+              return (
+                <button
+                  key={tab}
+                  onClick={() => setSchedTab(tab)}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-t border-b-2 transition-colors flex items-center gap-1.5
+                    ${schedTab === tab
+                      ? 'border-b-primary text-primary bg-primary/5'
+                      : 'border-b-transparent text-base-content/50 hover:text-base-content'}`}
+                >
+                  {label}
+                  {count !== undefined && (
+                    <span className={`badge badge-sm ${schedTab === tab ? 'badge-primary' : 'bg-base-200 text-base-content/50'}`}>
+                      {count}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+
+          {activeSchedule && activeSchedule.items.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="table table-sm">
+                <thead>
+                  <tr className="text-xs text-base-content/40 uppercase">
+                    <th>Technician</th>
+                    <th>Job #</th>
+                    <th>Customer</th>
+                    <th>Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {activeSchedule.items.map((item, i) => (
+                    <tr key={i} className="hover:bg-base-200/40">
+                      <td className="text-sm">
+                        {item.techs?.length > 0
+                          ? item.techs.join(', ')
+                          : <span className="text-base-content/30 italic">Unassigned</span>}
+                      </td>
+                      <td className="text-sm font-mono text-primary">{item.jobNumber || '—'}</td>
+                      <td className="text-sm font-medium">{item.customerName}</td>
+                      <td className="text-sm text-base-content/60">{fmtTime(item.start)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-sm text-base-content/40 px-4 py-4">No appointments scheduled</p>
+          )}
+        </div>
+      </div>
+
+      {/* Bottom 3-column layout */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+
+        {/* Col 1: Open Work Orders */}
+        <div className="card bg-base-100 shadow-sm">
+          <div className="card-body p-0">
+            <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-base-200">
+              <h3 className="font-semibold text-sm text-base-content flex items-center gap-2">
+                Active Work Orders
+                <span className="badge badge-sm badge-ghost">{d?.openWoCount ?? 0}</span>
+              </h3>
+            </div>
+            <div className="overflow-auto max-h-96">
+              {d?.openWorkOrders && d.openWorkOrders.length > 0 ? (
+                <table className="table table-sm">
+                  <thead>
+                    <tr className="text-xs text-base-content/40 uppercase">
+                      <th>Customer</th>
+                      <th className="text-right">Job#</th>
+                      <th className="text-right">Age</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {d.openWorkOrders.map((job, i) => {
+                      const age = daysSince(job.createdOn)
+                      return (
+                        <tr key={i} className="hover:bg-base-200/40">
+                          <td className="text-sm font-medium max-w-[8rem] truncate">{job.customerName}</td>
+                          <td className="text-sm font-mono text-primary text-right">{job.jobNumber || '—'}</td>
+                          <td className={`text-sm text-right font-medium ${age >= 90 ? 'text-error' : age >= 30 ? 'text-warning' : 'text-base-content/60'}`}>
+                            {age}d
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="text-sm text-base-content/40 px-4 py-4">No open work orders</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Col 2: AR Aging */}
+        <div className="card bg-base-100 shadow-sm">
+          <div className="card-body p-0">
+            <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-base-200">
+              <h3 className="font-semibold text-sm text-base-content">AR Aging</h3>
+              <span className="text-sm text-base-content/50">{fmtFull(arTotal)} outstanding</span>
+            </div>
+
+            {aging && (
+              <div className="px-4 py-3 space-y-2 border-b border-base-200">
+                {[
+                  { label: '0–30d',  val: aging.bucket0_30,   color: 'bg-success' },
+                  { label: '31–60d', val: aging.bucket31_60,  color: 'bg-warning' },
+                  { label: '61–90d', val: aging.bucket61_90,  color: 'bg-orange-400' },
+                  { label: '90d+',        val: aging.bucket90Plus, color: 'bg-error' },
+                ].map(({ label, val, color }) => (
+                  <div key={label} className="flex items-center gap-2">
+                    <span className="text-xs text-base-content/50 w-12 shrink-0">{label}</span>
+                    <div className="flex-1 h-2 bg-base-200 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full ${color} rounded-full transition-all`}
+                        style={{ width: `${agePct(val, arTotal)}%` }}
+                      />
+                    </div>
+                    <span className="text-xs font-medium text-base-content/70 w-16 text-right shrink-0">{fmt(val)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="overflow-auto max-h-64">
+              {d?.aRbyCustomer && d.aRbyCustomer.length > 0 ? (
+                <table className="table table-sm">
+                  <thead>
+                    <tr className="text-xs text-base-content/40 uppercase">
+                      <th>Customer</th>
+                      <th className="text-right">Amount Owed</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {d.aRbyCustomer.map((ar, i) => (
+                      <tr key={i} className="hover:bg-base-200/40">
+                        <td>
+                          <span className={`text-sm font-medium ${ar.oldestInvoiceDays > 90 ? 'text-error' : ar.oldestInvoiceDays > 60 ? 'text-warning' : 'text-base-content'}`}>
+                            {ar.customerName}
+                          </span>
+                          <span className="text-xs text-base-content/40 ml-1">{ar.oldestInvoiceDays}d</span>
+                        </td>
+                        <td className="text-sm font-semibold text-right">{fmtFull(ar.totalOwed)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="text-sm text-base-content/40 px-4 py-4">No outstanding AR</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Col 3: Overdue PMs */}
+        <div className="card bg-base-100 shadow-sm">
+          <div className="card-body p-0">
+            <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-base-200">
+              <h3 className="font-semibold text-sm text-base-content flex items-center gap-2">
+                Overdue PMs
+                {(d?.overduePmCount ?? 0) > 0 && (
+                  <span className="badge badge-sm badge-error badge-soft">{d!.overduePmCount}</span>
+                )}
+              </h3>
+              <a href="/app/pm-tracker" className="text-xs text-primary hover:underline">PM Tracker &#x2192;</a>
+            </div>
+            <div className="overflow-auto max-h-96">
+              {d?.overduePms && d.overduePms.length > 0 ? (
+                <ul className="divide-y divide-base-200">
+                  {d.overduePms.map((pm, i) => (
+                    <li key={i} className="flex items-center justify-between px-4 py-2.5 hover:bg-base-200/40">
+                      <div className="flex items-center gap-2">
+                        <span className="size-2 rounded-full bg-error shrink-0" />
+                        <span className="text-sm font-medium">{pm.customerName}</span>
+                      </div>
+                      <span className="text-xs text-base-content/40">{pm.daysSince}d ago</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-base-content/40 px-4 py-4">No overdue PMs &#x1F389;</p>
+              )}
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   )
