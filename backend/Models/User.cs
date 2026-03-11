@@ -9,6 +9,7 @@ public class User
     public string FirstName { get; set; } = "";
     public string LastName { get; set; } = "";
     public string Role { get; set; } = "member";    // "owner" | "admin" | "member"
+    public string? Title { get; set; }               // Custom display title (e.g. "CEO", "Operations Manager")
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? LastLoginAt { get; set; }
 
