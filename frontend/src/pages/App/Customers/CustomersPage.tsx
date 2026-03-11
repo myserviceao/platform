@@ -5,15 +5,35 @@ interface Customer {
   id: string
   name: string
   serviceTitanCustomerId: number
-  totalAR: number
-  current: number
-  days30: number
-  days60: number
-  days90: number
+  lastPmDate?: string
+  pmStatus: string
+  updatedAt: string
 }
 
-function formatCurrency(n: number) {
-  return n === 0 ? '$0' : '$' + n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+function daysAgo(date?: string | null) {
+  if (!date) return null
+  return Math.floor((Date.now() - new Date(date).getTime()) / (1000 * 60 * 60 * 24))
+}
+
+function fmtDate(date?: string | null) {
+  if (!date) return '—'
+  return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+function pmBadgeClass(status: string) {
+  switch (status) {
+    case 'Overdue': return 'badge-error'
+    case 'ComingDue': return 'badge-warning'
+    default: return 'badge-success'
+  }
+}
+
+function pmIconClass(status: string) {
+  switch (status) {
+    case 'Overdue': return 'icon-[tabler--alert-circle] text-error'
+    case 'ComingDue': return 'icon-[tabler--clock] text-warning'
+    default: return 'icon-[tabler--circle-check] text-success'
+  }
 }
 
 export function CustomersPage() {
@@ -21,11 +41,11 @@ export function CustomersPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
-  const [filter, setFilter] = useState<'all' | 'owed'>('all')
+  const [filter, setFilter] = useState<'all' | 'overdue' | 'comingdue'>('all')
   const navigate = useNavigate()
 
   const fetchCustomers = useCallback(async () => {
-    const res = await fetch('/customers', { credentials: 'include' })
+    const res = await fetch('/api/customers', { credentials: 'include' })
     if (res.ok) setCustomers(await res.json())
     else setError('Failed to load customers')
   }, [])
@@ -35,11 +55,15 @@ export function CustomersPage() {
   }, [fetchCustomers])
 
   const filtered = customers
-    .filter(c => filter === 'all' || c.totalAR > 0)
+    .filter(c => {
+      if (filter === 'overdue') return c.pmStatus === 'Overdue'
+      if (filter === 'comingdue') return c.pmStatus === 'ComingDue'
+      return true
+    })
     .filter(c => c.name.toLowerCase().includes(search.toLowerCase()))
 
-  const totalAR = customers.reduce((sum, c) => sum + c.totalAR, 0)
-  const withBalance = customers.filter(c => c.totalAR > 0).length
+  const overdueCount = customers.filter(c => c.pmStatus === 'Overdue').length
+  const comingDueCount = customers.filter(c => c.pmStatus === 'ComingDue').length
 
   if (loading) {
     return (
@@ -55,13 +79,21 @@ export function CustomersPage() {
         <div>
           <h1 className="text-2xl font-semibold text-base-content">Customers</h1>
           <p className="text-sm text-base-content/60 mt-1">
-            {customers.length} customers · {withBalance} with open balances
+            {customers.length} customers · {overdueCount} overdue PM
           </p>
         </div>
-        <div className="text-right">
-          <div className="text-xs text-base-content/40 uppercase tracking-wide">Total AR</div>
-          <div className={`text-2xl font-bold ${totalAR > 0 ? 'text-error' : 'text-base-content'}`}>
-            {formatCurrency(totalAR)}
+        <div className="flex gap-3">
+          <div className="text-right">
+            <div className="text-xs text-base-content/40 uppercase tracking-wide">Overdue PM</div>
+            <div className={`text-2xl font-bold ${overdueCount > 0 ? 'text-error' : 'text-base-content'}`}>
+              {overdueCount}
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-xs text-base-content/40 uppercase tracking-wide">Coming Due</div>
+            <div className={`text-2xl font-bold ${comingDueCount > 0 ? 'text-warning' : 'text-base-content'}`}>
+              {comingDueCount}
+            </div>
           </div>
         </div>
       </div>
@@ -93,11 +125,18 @@ export function CustomersPage() {
             <span className="badge badge-soft badge-sm ms-2">{customers.length}</span>
           </button>
           <button
-            onClick={() => setFilter('owed')}
-            className={`tab ${filter === 'owed' ? 'tab-active' : ''}`}
+            onClick={() => setFilter('overdue')}
+            className={`tab ${filter === 'overdue' ? 'tab-active' : ''}`}
           >
-            With Balance
-            <span className="badge badge-soft badge-error badge-sm ms-2">{withBalance}</span>
+            Overdue
+            <span className="badge badge-soft badge-error badge-sm ms-2">{overdueCount}</span>
+          </button>
+          <button
+            onClick={() => setFilter('comingdue')}
+            className={`tab ${filter === 'comingdue' ? 'tab-active' : ''}`}
+          >
+            Coming Due
+            <span className="badge badge-soft badge-warning badge-sm ms-2">{comingDueCount}</span>
           </button>
         </div>
       </div>
@@ -108,66 +147,51 @@ export function CustomersPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map(c => (
-            <button
-              key={c.id}
-              onClick={() => navigate(`/app/customers/${c.id}`)}
-              className="rounded-box border border-base-content/10 bg-base-100 p-4 text-left hover:border-primary/40 hover:bg-base-200 transition-all group"
-            >
-              <div className="flex items-start justify-between gap-2 mb-3">
-                <div className="flex items-center gap-3">
-                  <div className="avatar avatar-placeholder">
-                    <div className="bg-primary/20 text-primary rounded-full size-9 text-sm font-semibold">
-                      {c.name.trim().charAt(0).toUpperCase()}
+          {filtered.map(c => {
+            const days = daysAgo(c.lastPmDate)
+            return (
+              <button
+                key={c.id}
+                onClick={() => navigate(`/app/customers/${c.id}`)}
+                className="rounded-box border border-base-content/10 bg-base-100 p-4 text-left hover:border-primary/40 hover:bg-base-200 transition-all group"
+              >
+                <div className="flex items-start justify-between gap-2 mb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="avatar avatar-placeholder">
+                      <div className="bg-primary/20 text-primary rounded-full size-9 text-sm font-semibold">
+                        {c.name.trim().charAt(0).toUpperCase()}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="font-medium text-base-content text-sm leading-tight group-hover:text-primary transition-colors">
+                        {c.name}
+                      </div>
+                      <div className="text-xs text-base-content/40 mt-0.5">
+                        ST #{c.serviceTitanCustomerId}
+                      </div>
                     </div>
                   </div>
-                  <div>
-                    <div className="font-medium text-base-content text-sm leading-tight group-hover:text-primary transition-colors">
-                      {c.name}
-                    </div>
-                    <div className="text-xs text-base-content/40 mt-0.5">
-                      ST #{c.serviceTitanCustomerId}
-                    </div>
-                  </div>
+                  <span className="icon-[tabler--chevron-right] size-4 text-base-content/30 group-hover:text-primary shrink-0 mt-1 transition-colors" />
                 </div>
-                <span className="icon-[tabler--chevron-right] size-4 text-base-content/30 group-hover:text-primary shrink-0 mt-1 transition-colors" />
-              </div>
 
-              {c.totalAR > 0 ? (
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-base-content/50">Balance Due</span>
-                    <span className="text-sm font-semibold text-error">{formatCurrency(c.totalAR)}</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs text-base-content/50">
+                    <span className={`${pmIconClass(c.pmStatus)} size-3.5`} />
+                    Last PM: {c.lastPmDate ? fmtDate(c.lastPmDate) : 'None on file'}
                   </div>
-                  <div className="grid grid-cols-3 gap-1 text-center">
-                    {c.days30 > 0 && (
-                      <div className="rounded bg-warning/10 px-1 py-0.5">
-                        <div className="text-xs font-medium text-warning">{formatCurrency(c.days30)}</div>
-                        <div className="text-[10px] text-base-content/40">30 days</div>
-                      </div>
-                    )}
-                    {c.days60 > 0 && (
-                      <div className="rounded bg-error/10 px-1 py-0.5">
-                        <div className="text-xs font-medium text-error">{formatCurrency(c.days60)}</div>
-                        <div className="text-[10px] text-base-content/40">60 days</div>
-                      </div>
-                    )}
-                    {c.days90 > 0 && (
-                      <div className="rounded bg-error/20 px-1 py-0.5">
-                        <div className="text-xs font-bold text-error">{formatCurrency(c.days90)}</div>
-                        <div className="text-[10px] text-base-content/40">90+ days</div>
-                      </div>
-                    )}
+                  <span className={`badge badge-soft badge-xs ${pmBadgeClass(c.pmStatus)}`}>
+                    {c.pmStatus === 'ComingDue' ? 'Coming Due' : c.pmStatus}
+                  </span>
+                </div>
+
+                {days !== null && (
+                  <div className="text-xs text-base-content/30 mt-1">
+                    {days} days ago
                   </div>
-                </div>
-              ) : (
-                <div className="flex items-center gap-1.5 text-xs text-success">
-                  <span className="icon-[tabler--circle-check] size-3.5" />
-                  No open balance
-                </div>
-              )}
-            </button>
-          ))}
+                )}
+              </button>
+            )
+          })}
         </div>
       )}
     </div>
