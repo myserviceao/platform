@@ -2,19 +2,24 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTheme, type Theme } from '@/hooks/useTheme'
 import { useAuth } from '@/hooks/useAuth'
 
-const THEMES: { value: Theme; label: string; description: string; colors: [string, string, string] }[] = [
-  { value: 'dark', label: 'Dark', description: 'Default dark with purple accents', colors: ['#1d232a', '#661ae6', '#2a323c'] },
-  { value: 'midnight', label: 'Midnight', description: 'Deep navy with sky blue accents', colors: ['#0f172a', '#38bdf8', '#1e293b'] },
-  { value: 'emerald', label: 'Emerald', description: 'Dark with rich green accents', colors: ['#0f1a17', '#10b981', '#1c2826'] },
-  { value: 'crimson', label: 'Crimson', description: 'Dark with bold red-pink accents', colors: ['#1a1015', '#f43f5e', '#2a2025'] },
-  { value: 'ocean', label: 'Ocean', description: 'Deep indigo with violet accents', colors: ['#0c0a3e', '#6366f1', '#1e1b4b'] },
-  { value: 'amber', label: 'Amber', description: 'Warm dark with gold accents', colors: ['#1c1917', '#f59e0b', '#292524'] },
-  { value: 'slate', label: 'Slate', description: 'Clean minimal dark with muted tones', colors: ['#0f172a', '#94a3b8', '#1e293b'] },
-  { value: 'luxury', label: 'Luxury', description: 'Elegant black with gold', colors: ['#09090b', '#dca54c', '#171717'] },
-  { value: 'gourmet', label: 'Gourmet', description: 'Warm cream with earthy tones', colors: ['#faf5ef', '#c8702a', '#f0e8dc'] },
-  { value: 'light', label: 'Light', description: 'Clean and bright', colors: ['#ffffff', '#661ae6', '#f2f2f2'] },
-  { value: 'corporate', label: 'Corporate', description: 'Professional with blue tones', colors: ['#ffffff', '#4b6bfb', '#f0f0f0'] },
-  { value: 'soft', label: 'Soft', description: 'Gentle pastels, easy reading', colors: ['#f9fafb', '#6366f1', '#f3f4f6'] },
+const THEMES: { value: Theme; label: string; description: string; mode: 'dark' | 'light' }[] = [
+  { value: 'dark', label: 'Dark', description: 'Default dark theme', mode: 'dark' },
+  { value: 'black', label: 'Black', description: 'Pure black OLED-friendly', mode: 'dark' },
+  { value: 'shadcn', label: 'Shadcn', description: 'Inspired by shadcn/ui', mode: 'dark' },
+  { value: 'vscode', label: 'VS Code', description: 'Editor-inspired dark', mode: 'dark' },
+  { value: 'spotify', label: 'Spotify', description: 'Music-inspired green on dark', mode: 'dark' },
+  { value: 'slack', label: 'Slack', description: 'Workspace-inspired dark', mode: 'dark' },
+  { value: 'valorant', label: 'Valorant', description: 'Gaming-inspired red on dark', mode: 'dark' },
+  { value: 'claude', label: 'Claude', description: 'Warm, Anthropic-inspired', mode: 'dark' },
+  { value: 'luxury', label: 'Luxury', description: 'Elegant with gold accents', mode: 'dark' },
+  { value: 'light', label: 'Light', description: 'Clean bright theme', mode: 'light' },
+  { value: 'corporate', label: 'Corporate', description: 'Professional blue tones', mode: 'light' },
+  { value: 'soft', label: 'Soft', description: 'Gentle pastel colors', mode: 'light' },
+  { value: 'pastel', label: 'Pastel', description: 'Soft candy colors', mode: 'light' },
+  { value: 'gourmet', label: 'Gourmet', description: 'Warm cream and earthy', mode: 'light' },
+  { value: 'ghibli', label: 'Ghibli', description: 'Anime-inspired soft tones', mode: 'light' },
+  { value: 'mintlify', label: 'Mintlify', description: 'Modern docs-inspired', mode: 'light' },
+  { value: 'perplexity', label: 'Perplexity', description: 'AI-search inspired', mode: 'light' },
 ]
 
 interface Vendor { id: number; name: string; contactName?: string; phone?: string; email?: string }
@@ -181,46 +186,49 @@ export function SettingsPage() {
             <h2 className="text-base-content font-semibold text-base">Appearance</h2>
             <p className="text-base-content/60 text-sm mt-0.5">Choose how MyServiceAO looks for you.</p>
           </div>
-          <div className="grid gap-3 grid-cols-3 sm:grid-cols-4 lg:grid-cols-6">
-            {THEMES.map((t) => {
-              const active = theme === t.value
-              return (
-                <button
-                  key={t.value}
-                  onClick={() => setTheme(t.value)}
-                  className={`rounded-box border-2 p-3 text-center transition-all ${
-                    active ? 'border-primary ring-2 ring-primary/30' : 'border-base-content/10 hover:border-base-content/30'
-                  }`}
-                >
-                  <div className="flex justify-center gap-1 mb-2">
-                    {t.colors.map((c, i) => (
-                      <div
-                        key={i}
-                        className={`rounded-full ${i === 1 ? 'size-6' : 'size-4'}`}
-                        style={{ backgroundColor: c }}
-                      />
-                    ))}
-                  </div>
-                  <div className={`text-xs font-medium ${active ? 'text-primary' : 'text-base-content/70'}`}>{t.label}</div>
-                  {active && <span className="icon-[tabler--check] size-3.5 text-primary mx-auto mt-1 block" />}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* Vendors */}
-      <div className="card bg-base-100 shadow-sm">
-        <div className="card-body gap-4">
-          <div className="flex items-center justify-between">
+          <div className="space-y-4">
             <div>
-              <h2 className="text-base-content font-semibold text-base">Vendors</h2>
-              <p className="text-base-content/60 text-sm mt-0.5">Manage vendors for Accounts Payable.</p>
+              <p className="text-xs text-base-content/50 font-medium uppercase tracking-wide mb-2">Dark Themes</p>
+              <div className="grid gap-2 grid-cols-3 sm:grid-cols-4 lg:grid-cols-5">
+                {THEMES.filter(t => t.mode === 'dark').map((t) => {
+                  const active = theme === t.value
+                  return (
+                    <button
+                      key={t.value}
+                      onClick={() => setTheme(t.value)}
+                      className={`rounded-box border-2 p-3 text-center transition-all ${
+                        active ? 'border-primary ring-2 ring-primary/30' : 'border-base-content/10 hover:border-base-content/30'
+                      }`}
+                    >
+                      <div className={`text-xs font-medium ${active ? 'text-primary' : 'text-base-content/70'}`}>{t.label}</div>
+                      <div className="text-[10px] text-base-content/40 mt-0.5 truncate">{t.description}</div>
+                      {active && <span className="icon-[tabler--check] size-3.5 text-primary mx-auto mt-1 block" />}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
-            <button onClick={() => setShowVendorForm(true)} className="btn btn-primary btn-sm gap-1">
-              <span className="icon-[tabler--plus] size-4" /> Add Vendor
-            </button>
+            <div>
+              <p className="text-xs text-base-content/50 font-medium uppercase tracking-wide mb-2">Light Themes</p>
+              <div className="grid gap-2 grid-cols-3 sm:grid-cols-4 lg:grid-cols-5">
+                {THEMES.filter(t => t.mode === 'light').map((t) => {
+                  const active = theme === t.value
+                  return (
+                    <button
+                      key={t.value}
+                      onClick={() => setTheme(t.value)}
+                      className={`rounded-box border-2 p-3 text-center transition-all ${
+                        active ? 'border-primary ring-2 ring-primary/30' : 'border-base-content/10 hover:border-base-content/30'
+                      }`}
+                    >
+                      <div className={`text-xs font-medium ${active ? 'text-primary' : 'text-base-content/70'}`}>{t.label}</div>
+                      <div className="text-[10px] text-base-content/40 mt-0.5 truncate">{t.description}</div>
+                      {active && <span className="icon-[tabler--check] size-3.5 text-primary mx-auto mt-1 block" />}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
           </div>
 
           {showVendorForm && (
@@ -249,7 +257,7 @@ export function SettingsPage() {
                 </thead>
                 <tbody>
                   {vendors.map(v => (
-                    <tr key={v.id} className="hover">
+                    <tr key={v.id} className="row-hover">
                       <td className="font-medium text-base-content">{v.name}</td>
                       <td className="text-base-content/60">{v.contactName || '—'}</td>
                       <td className="text-base-content/60">{v.phone || '—'}</td>
