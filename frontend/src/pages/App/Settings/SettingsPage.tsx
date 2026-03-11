@@ -3,18 +3,18 @@ import { useTheme, type Theme } from '@/hooks/useTheme'
 import { useAuth } from '@/hooks/useAuth'
 
 const THEMES: { value: Theme; label: string; description: string; colors: [string, string, string] }[] = [
-  { value: 'dark', label: 'Dark', description: 'Default dark theme with purple accents', colors: ['#1d232a', '#661ae6', '#2a323c'] },
-  { value: 'night', label: 'Night', description: 'Deep navy with blue accents', colors: ['#0f1729', '#38bdf8', '#1e293b'] },
-  { value: 'dim', label: 'Dim', description: 'Warm dark with orange accents', colors: ['#1c1917', '#f59e0b', '#292524'] },
-  { value: 'dracula', label: 'Dracula', description: 'Rich dark with pink and purple', colors: ['#282a36', '#ff79c6', '#44475a'] },
-  { value: 'synthwave', label: 'Synthwave', description: 'Retro neon with vibrant colors', colors: ['#1a103d', '#e779c1', '#2d1b69'] },
-  { value: 'sunset', label: 'Sunset', description: 'Warm tones with amber highlights', colors: ['#1c1917', '#f97316', '#292524'] },
-  { value: 'forest', label: 'Forest', description: 'Natural greens, earthy feel', colors: ['#171212', '#22c55e', '#1c1917'] },
-  { value: 'luxury', label: 'Luxury', description: 'Elegant dark with gold accents', colors: ['#09090b', '#dca54c', '#171717'] },
-  { value: 'light', label: 'Light', description: 'Clean and bright for daytime', colors: ['#ffffff', '#661ae6', '#f2f2f2'] },
+  { value: 'dark', label: 'Dark', description: 'Default dark with purple accents', colors: ['#1d232a', '#661ae6', '#2a323c'] },
+  { value: 'midnight', label: 'Midnight', description: 'Deep navy with sky blue accents', colors: ['#0f172a', '#38bdf8', '#1e293b'] },
+  { value: 'emerald', label: 'Emerald', description: 'Dark with rich green accents', colors: ['#0f1a17', '#10b981', '#1c2826'] },
+  { value: 'crimson', label: 'Crimson', description: 'Dark with bold red-pink accents', colors: ['#1a1015', '#f43f5e', '#2a2025'] },
+  { value: 'ocean', label: 'Ocean', description: 'Deep indigo with violet accents', colors: ['#0c0a3e', '#6366f1', '#1e1b4b'] },
+  { value: 'amber', label: 'Amber', description: 'Warm dark with gold accents', colors: ['#1c1917', '#f59e0b', '#292524'] },
+  { value: 'slate', label: 'Slate', description: 'Clean minimal dark with muted tones', colors: ['#0f172a', '#94a3b8', '#1e293b'] },
+  { value: 'luxury', label: 'Luxury', description: 'Elegant black with gold', colors: ['#09090b', '#dca54c', '#171717'] },
+  { value: 'gourmet', label: 'Gourmet', description: 'Warm cream with earthy tones', colors: ['#faf5ef', '#c8702a', '#f0e8dc'] },
+  { value: 'light', label: 'Light', description: 'Clean and bright', colors: ['#ffffff', '#661ae6', '#f2f2f2'] },
   { value: 'corporate', label: 'Corporate', description: 'Professional with blue tones', colors: ['#ffffff', '#4b6bfb', '#f0f0f0'] },
   { value: 'soft', label: 'Soft', description: 'Gentle pastels, easy reading', colors: ['#f9fafb', '#6366f1', '#f3f4f6'] },
-  { value: 'gourmet', label: 'Gourmet', description: 'Refined dark with warm tones', colors: ['#1a1a2e', '#e94560', '#16213e'] },
 ]
 
 interface Vendor { id: number; name: string; contactName?: string; phone?: string; email?: string }
