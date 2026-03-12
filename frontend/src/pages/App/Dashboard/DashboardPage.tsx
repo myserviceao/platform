@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { WeatherCard } from './WeatherCard'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 interface ArBucket {
@@ -276,6 +277,21 @@ export function DashboardPage() {
           value={(d?.overduePmCount ?? 0).toString()}
           sub={d?.overduePms?.length ? `longest ${d.overduePms[0]?.daysSince ?? 0}d ago` : 'all current'}
         />
+      </div>
+
+      {/* ── Weather ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <WeatherCard />
+        <div className="lg:col-span-2 rounded-box border border-base-content/10 bg-base-100 p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="icon-[tabler--alert-triangle] size-5 text-warning" />
+            <h3 className="font-semibold text-sm">Weather Impact</h3>
+          </div>
+          <div className="text-xs text-base-content/50">
+            Weather conditions that may affect HVAC service calls today and this week.
+            Extreme heat or cold drives higher call volume.
+          </div>
+        </div>
       </div>
 
       {/* Schedule Strip */}
