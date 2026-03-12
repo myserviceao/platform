@@ -338,6 +338,39 @@ public class ServiceTitanSyncService
                         }
                     }
 
+                    // Also build jobNumber -> locationAddress map
+                    var locationMap = new Dictionary<string, string>();
+                    if (reportRoot.TryGetProperty("data", out var reportData2))
+                    {
+                        foreach (var row in reportData2.EnumerateArray())
+                        {
+                            if (row.GetArrayLength() < 15) continue;
+                            var jobNumber = row[0].GetString() ?? "";
+                            var location = row[14].ValueKind == JsonValueKind.String ? row[14].GetString() : null;
+                            if (!string.IsNullOrWhiteSpace(location))
+                                locationMap[jobNumber] = location!;
+                        }
+                    }
+
+                    // Update appointments with location addresses
+                    var allAppts = await _db.Appointments
+                        .Where(a => a.TenantId == tenantId)
+                        .ToListAsync();
+                    int locUpdated = 0;
+                    foreach (var appt in allAppts)
+                    {
+                        if (locationMap.TryGetValue(appt.JobNumber, out var locAddr) && appt.LocationName != locAddr)
+                        {
+                            appt.LocationName = locAddr;
+                            locUpdated++;
+                        }
+                    }
+                    if (locUpdated > 0)
+                    {
+                        await _db.SaveChangesAsync();
+                        _logger.LogInformation("[Sync] Updated {Count} appointments with location addresses from report", locUpdated);
+                    }
+
                     _logger.LogInformation("[Sync] Report returned {Count} jobs with hold reasons", holdReasonMap.Count);
 
                     // Match to unresolved hold jobs
