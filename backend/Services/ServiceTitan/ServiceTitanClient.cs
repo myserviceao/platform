@@ -200,4 +200,25 @@ public class ServiceTitanClient
             throw new Exception($"ST API error {(int)response.StatusCode}: {body}");
         return body;
     }
+
+    // Get tag types from ST Settings API
+    public async Task<string> GetTagTypesAsync(string accessToken, string stTenantId)
+    {
+        var url = $"{BaseUrl}/settings/v2/tenant/{stTenantId}/tag-types?pageSize=200&active=True";
+        return await GetAsync(accessToken, url);
+    }
+
+    // PATCH job tags in ST
+    public async Task<bool> UpdateJobTagsAsync(string accessToken, string stTenantId, long stJobId, List<long> tagTypeIds)
+    {
+        var url = $"{BaseUrl}/jpm/v2/tenant/{stTenantId}/jobs/{stJobId}";
+        var body = System.Text.Json.JsonSerializer.Serialize(new { tagTypeIds });
+        var request = new HttpRequestMessage(new HttpMethod("PATCH"), url);
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+        request.Headers.Add("ST-App-Key", _appKey);
+        request.Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
+        var response = await _http.SendAsync(request);
+        return response.IsSuccessStatusCode;
+    }
+
 }
