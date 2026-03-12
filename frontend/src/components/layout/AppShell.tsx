@@ -92,13 +92,13 @@ const navItems: NavEntry[] = [
   },
   {
     label: 'Accounts Payable',
-  },
-  {
-    to: '/app/cash-flow',
-    icon: 'icon-[tabler--chart-line]',
-    label: 'Cash Flow',
     icon: 'icon-[tabler--receipt]',
     path: '/app/ap',
+  },
+  {
+    label: 'Cash Flow',
+    icon: 'icon-[tabler--chart-line]',
+    path: '/app/cash-flow',
   },
   {
     label: 'AR Alerts',
