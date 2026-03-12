@@ -248,6 +248,8 @@ public static class DbMigrations
         // Make VendorId nullable for AP bills from ST that may not have a matched vendor
         await db.Database.ExecuteSqlRawAsync(@"
             ALTER TABLE ""ApBills"" ALTER COLUMN ""VendorId"" DROP NOT NULL;
+            ALTER TABLE ""ApBills"" DROP CONSTRAINT IF EXISTS ""FK_ApBills_Vendors_VendorId"";
+            ALTER TABLE ""ApBills"" DROP CONSTRAINT IF EXISTS ""ApBills_VendorId_fkey"";
         ");
 
     }
