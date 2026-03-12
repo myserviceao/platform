@@ -948,8 +948,9 @@ public class ServiceTitanSyncService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "[Sync] Failed for tenantId={TenantId}", tenantId);
-            return new SyncResult { Success = false, Error = ex.Message };
+            var fullError = ex.InnerException != null ? $"{ex.Message} → {ex.InnerException.Message}" : ex.Message;
+            _logger.LogError(ex, "[Sync] Failed for tenantId={TenantId}: {Error}", tenantId, fullError);
+            return new SyncResult { Success = false, Error = fullError };
         }
     }
 
