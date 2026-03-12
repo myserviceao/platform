@@ -294,56 +294,117 @@ public class ServiceTitanSyncService
 
 
 
-            // 4d. Resolve hold reasons from job history
-            // The "Job Hold" event in job history contains the hold reason name in the memo field
+            // 4d. Resolve hold reasons from ST Reporting API (Appointments report)
+            // The Reporting API returns ApptHoldReasons for each job
             var holdJobsToResolve = await _db.Jobs
                 .Where(j => j.TenantId == tenantId && j.Status == "Hold" && j.HoldReasonName == null)
                 .ToListAsync();
 
             if (holdJobsToResolve.Count > 0)
             {
-                _logger.LogInformation("[Sync] Resolving hold reasons from job history for {Count} jobs", holdJobsToResolve.Count);
-                int historyResolved = 0;
+                _logger.LogInformation("[Sync] Resolving hold reasons from Reporting API for {Count} jobs", holdJobsToResolve.Count);
+                int reportResolved = 0;
 
-                foreach (var hj in holdJobsToResolve)
+                try
                 {
-                    try
-                    {
-                        var histRaw = await _client.GetJobHistoryAsync(token, stTenantId, hj.StJobId);
-                        var histDoc = JsonDocument.Parse(histRaw);
-                        if (histDoc.RootElement.TryGetProperty("history", out var histArr))
+                    // Call Appointments report (id=3448) with DateType=2
+                    var reportRaw = await _client.GetReportDataAsync(token, stTenantId, "operations", 3448,
+                        System.Text.Json.JsonSerializer.Serialize(new
                         {
-                            // Find the most recent "Job Hold" event with a memo
-                            string? holdReason = null;
-                            DateTime latest = DateTime.MinValue;
-                            foreach (var evt in histArr.EnumerateArray())
+                            parameters = new[]
                             {
-                                var eventType = evt.TryGetProperty("eventType", out var etProp) ? etProp.GetString() : "";
-                                if (eventType != "Job Hold") continue;
-                                var memo = evt.TryGetProperty("memo", out var mProp) ? mProp.GetString() : null;
-                                if (string.IsNullOrWhiteSpace(memo)) continue;
-                                var date = evt.TryGetProperty("date", out var dProp) && dProp.ValueKind == JsonValueKind.String
-                                    ? DateTime.Parse(dProp.GetString()!) : DateTime.MinValue;
-                                if (date > latest) { latest = date; holdReason = memo; }
+                                new { name = "DateType", value = "2" },
+                                new { name = "From", value = "2025-01-01" },
+                                new { name = "To", value = DateTime.UtcNow.AddMonths(6).ToString("yyyy-MM-dd") }
                             }
+                        }));
 
-                            if (holdReason != null)
-                            {
-                                hj.HoldReasonName = holdReason;
-                                historyResolved++;
-                                _logger.LogInformation("[Sync] Job #{JobNum}: hold reason = {Reason} (from history)", hj.JobNumber, holdReason);
-                            }
+                    var reportDoc = JsonDocument.Parse(reportRaw);
+                    var reportRoot = reportDoc.RootElement;
+
+                    // Build a map of jobNumber -> holdReason from report data
+                    var holdReasonMap = new Dictionary<string, string>();
+                    if (reportRoot.TryGetProperty("data", out var reportData))
+                    {
+                        foreach (var row in reportData.EnumerateArray())
+                        {
+                            if (row.GetArrayLength() < 19) continue;
+                            var jobNumber = row[0].GetString() ?? "";
+                            var holdsOnHold = row[17].ValueKind == JsonValueKind.Number ? row[17].GetInt32() : 0;
+                            var holdReason = row[18].ValueKind == JsonValueKind.String ? row[18].GetString() : null;
+
+                            if (holdsOnHold > 0 && !string.IsNullOrWhiteSpace(holdReason))
+                                holdReasonMap[jobNumber] = holdReason;
                         }
                     }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "[Sync] Failed to get history for job {JobNum}", hj.JobNumber);
-                    }
-                }
 
-                if (historyResolved > 0)
+                    _logger.LogInformation("[Sync] Report returned {Count} jobs with hold reasons", holdReasonMap.Count);
+
+                    // Match to unresolved hold jobs
+                    foreach (var hj in holdJobsToResolve)
+                    {
+                        if (holdReasonMap.TryGetValue(hj.JobNumber, out var reason))
+                        {
+                            hj.HoldReasonName = reason;
+                            reportResolved++;
+                            _logger.LogInformation("[Sync] Job #{JobNum}: {Reason} (from report)", hj.JobNumber, reason);
+                        }
+                    }
+
+                    // Also update ALL hold jobs (even previously resolved) if report has newer data
+                    var allHoldJobs = await _db.Jobs
+                        .Where(j => j.TenantId == tenantId && j.Status == "Hold")
+                        .ToListAsync();
+                    foreach (var hj in allHoldJobs)
+                    {
+                        if (holdReasonMap.TryGetValue(hj.JobNumber, out var reason) && hj.HoldReasonName != reason)
+                        {
+                            hj.HoldReasonName = reason;
+                            _logger.LogInformation("[Sync] Job #{JobNum}: updated to {Reason}", hj.JobNumber, reason);
+                        }
+                    }
+
+                    if (reportResolved > 0 || _db.ChangeTracker.HasChanges())
+                        await _db.SaveChangesAsync();
+
+                    _logger.LogInformation("[Sync] Resolved {Resolved}/{Total} hold reasons from report", reportResolved, holdJobsToResolve.Count);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "[Sync] Reporting API failed, falling back to job history");
+
+                    // Fallback: try job history for each unresolved hold job
+                    foreach (var hj in holdJobsToResolve)
+                    {
+                        try
+                        {
+                            var histRaw = await _client.GetJobHistoryAsync(token, stTenantId, hj.StJobId);
+                            var histDoc = JsonDocument.Parse(histRaw);
+                            if (histDoc.RootElement.TryGetProperty("history", out var histArr))
+                            {
+                                string? holdReason = null;
+                                DateTime latest = DateTime.MinValue;
+                                foreach (var evt in histArr.EnumerateArray())
+                                {
+                                    var eventType = evt.TryGetProperty("eventType", out var etProp) ? etProp.GetString() : "";
+                                    if (eventType != "Job Hold") continue;
+                                    var memo = evt.TryGetProperty("memo", out var mProp) ? mProp.GetString() : null;
+                                    if (string.IsNullOrWhiteSpace(memo)) continue;
+                                    var date = evt.TryGetProperty("date", out var dProp) && dProp.ValueKind == JsonValueKind.String
+                                        ? DateTime.Parse(dProp.GetString()!) : DateTime.MinValue;
+                                    if (date > latest) { latest = date; holdReason = memo; }
+                                }
+                                if (holdReason != null)
+                                {
+                                    hj.HoldReasonName = holdReason;
+                                    _logger.LogInformation("[Sync] Job #{JobNum}: {Reason} (from history fallback)", hj.JobNumber, holdReason);
+                                }
+                            }
+                        }
+                        catch { }
+                    }
                     await _db.SaveChangesAsync();
-                _logger.LogInformation("[Sync] Resolved {Resolved}/{Total} hold reasons from history", historyResolved, holdJobsToResolve.Count);
+                }
             }
 
             // Also clear hold reason for jobs no longer on hold
