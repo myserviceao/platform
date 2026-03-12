@@ -676,6 +676,11 @@ public class ServiceTitanSyncService
         return await _client.GetAppointmentsByStatusAsync(token, tenant.StTenantId, "Hold");
     }
 
+    public async Task<string?> GetTokenAsync(int tenantId)
+    {
+        return await _oauth.GetValidTokenAsync(tenantId);
+    }
+
 }
 
 public class SyncResult
