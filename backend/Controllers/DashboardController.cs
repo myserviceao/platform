@@ -481,4 +481,132 @@ public class DashboardController : ControllerBase
         catch (Exception ex) { return Ok(new { error = ex.Message }); }
     }
 
+
+    [HttpGet("cashflow-forecast")]
+    public async Task<IActionResult> GetCashFlowForecast()
+    {
+        var tenantId = HttpContext.Session.GetInt32("tenantId");
+        if (tenantId == null) return Unauthorized();
+
+        var now = DateTime.UtcNow;
+        var today = now.Date;
+
+        // ── INFLOWS: AR Collections (projected by aging bucket) ──
+        var arInvoices = await _db.Invoices
+            .Where(i => i.TenantId == tenantId.Value && i.BalanceRemaining > 0)
+            .Select(i => new { i.BalanceRemaining, i.InvoiceDate, i.CustomerName })
+            .ToListAsync();
+
+        // Estimate when AR will be collected based on aging
+        // 0-30 days: expect collection in next 2 weeks
+        // 31-60 days: expect collection in next 4 weeks
+        // 61-90 days: expect collection in next 6 weeks
+        // 90+: uncertain, spread over 8 weeks
+        var arByWeek = new decimal[8]; // 8 weeks forecast
+        foreach (var inv in arInvoices)
+        {
+            var ageDays = (now - inv.InvoiceDate).TotalDays;
+            if (ageDays <= 30)
+            {
+                arByWeek[0] += inv.BalanceRemaining * 0.4m;
+                arByWeek[1] += inv.BalanceRemaining * 0.6m;
+            }
+            else if (ageDays <= 60)
+            {
+                arByWeek[1] += inv.BalanceRemaining * 0.3m;
+                arByWeek[2] += inv.BalanceRemaining * 0.4m;
+                arByWeek[3] += inv.BalanceRemaining * 0.3m;
+            }
+            else if (ageDays <= 90)
+            {
+                arByWeek[3] += inv.BalanceRemaining * 0.3m;
+                arByWeek[4] += inv.BalanceRemaining * 0.4m;
+                arByWeek[5] += inv.BalanceRemaining * 0.3m;
+            }
+            else
+            {
+                for (int w = 4; w < 8; w++) arByWeek[w] += inv.BalanceRemaining * 0.25m;
+            }
+        }
+
+        // ── INFLOWS: Scheduled Job Revenue ──
+        var scheduledByWeek = new decimal[8];
+        var scheduledJobs = await _db.Appointments
+            .Include(a => a.Technicians)
+            .Where(a => a.TenantId == tenantId.Value
+                && a.Start >= today && a.Start < today.AddDays(56)
+                && a.Status != "Canceled" && a.Status != "Cancelled" && a.Status != "Hold")
+            .ToListAsync();
+
+        var jobIds = scheduledJobs.Select(a => a.StJobId).Distinct().ToList();
+        var jobAmounts = await _db.Jobs
+            .Where(j => j.TenantId == tenantId.Value && jobIds.Contains(j.StJobId))
+            .ToDictionaryAsync(j => j.StJobId, j => j.TotalAmount);
+
+        foreach (var appt in scheduledJobs)
+        {
+            var weekIdx = Math.Min(7, (int)((appt.Start - today).TotalDays / 7));
+            jobAmounts.TryGetValue(appt.StJobId, out var amt);
+            scheduledByWeek[weekIdx] += amt;
+        }
+
+        // ── OUTFLOWS: AP Bills Due ──
+        var apByWeek = new decimal[8];
+        var unpaidBills = await _db.ApBills
+            .Where(b => b.TenantId == tenantId.Value && !b.IsPaid)
+            .Select(b => new { b.Amount, b.DueDate })
+            .ToListAsync();
+
+        foreach (var bill in unpaidBills)
+        {
+            var daysUntil = (bill.DueDate - today).TotalDays;
+            if (daysUntil < 0) daysUntil = 0; // overdue, count as this week
+            var weekIdx = Math.Min(7, (int)(daysUntil / 7));
+            apByWeek[weekIdx] += bill.Amount;
+        }
+
+        // ── Build weekly forecast ──
+        var weeks = new List<object>();
+        decimal runningBalance = 0;
+        var totalAr = arInvoices.Sum(i => i.BalanceRemaining);
+        var totalAp = unpaidBills.Sum(b => b.Amount);
+
+        for (int w = 0; w < 8; w++)
+        {
+            var weekStart = today.AddDays(w * 7);
+            var inflow = arByWeek[w] + scheduledByWeek[w];
+            var outflow = apByWeek[w];
+            runningBalance += inflow - outflow;
+
+            weeks.Add(new
+            {
+                Week = w + 1,
+                Label = w == 0 ? "This Week" : w == 1 ? "Next Week" : weekStart.ToString("MMM d"),
+                ArCollections = Math.Round(arByWeek[w], 2),
+                ScheduledRevenue = Math.Round(scheduledByWeek[w], 2),
+                TotalInflow = Math.Round(inflow, 2),
+                ApPayments = Math.Round(apByWeek[w], 2),
+                NetCashFlow = Math.Round(inflow - outflow, 2),
+                RunningBalance = Math.Round(runningBalance, 2)
+            });
+        }
+
+        // ── Summary stats ──
+        var totalInflow8w = weeks.Cast<dynamic>().Sum(w => (decimal)((dynamic)w).TotalInflow);
+        var totalOutflow8w = weeks.Cast<dynamic>().Sum(w => (decimal)((dynamic)w).ApPayments);
+
+        return Ok(new
+        {
+            CurrentArBalance = totalAr,
+            CurrentApBalance = totalAp,
+            NetPosition = totalAr - totalAp,
+            ForecastWeeks = weeks,
+            TotalProjectedInflow = Math.Round(arByWeek.Sum() + scheduledByWeek.Sum(), 2),
+            TotalProjectedOutflow = Math.Round(apByWeek.Sum(), 2),
+            ScheduledJobCount = scheduledJobs.Count,
+            ArInvoiceCount = arInvoices.Count,
+            ApBillCount = unpaidBills.Count
+        });
+    }
+
 }
