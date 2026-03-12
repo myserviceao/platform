@@ -223,22 +223,8 @@ public class ApController : ControllerBase
             byVendor
         });
     }
-}
 
-public class CreateVendorRequest
-{
-    public string Name { get; set; } = "";
-    public string? ContactName { get; set; }
-    public string? Phone { get; set; }
-    public string? Email { get; set; }
-}
 
-public class CreateBillRequest
-{
-    public int VendorId { get; set; }
-    public string? InvoiceNumber { get; set; }
-    public decimal Amount { get; set; }
-    public DateTime DueDate { get; set; }
 
     // ── Purchase Orders ────────────────────────────────────────
 
@@ -327,6 +313,21 @@ public class CreateBillRequest
                 .OrderByDescending(g => g.Total)
                 .ToList()
         });
-    }
+}
+}
 
+public class CreateVendorRequest
+{
+    public string Name { get; set; } = "";
+    public string? ContactName { get; set; }
+    public string? Phone { get; set; }
+    public string? Email { get; set; }
+}
+
+public class CreateBillRequest
+{
+    public int VendorId { get; set; }
+    public string? InvoiceNumber { get; set; }
+    public decimal Amount { get; set; }
+    public DateTime DueDate { get; set; }
 }
