@@ -66,7 +66,6 @@ export function ApPage() {
         const unpaidBillTotal = bills.filter(b => !b.isPaid).reduce((s, b) => s + b.amount, 0)
         const now = Date.now()
         const overdueBills = bills.filter(b => !b.isPaid && new Date(b.dueDate).getTime() < now)
-        const dueThisWeek = bills.filter(b => !b.isPaid && new Date(b.dueDate).getTime() >= now && new Date(b.dueDate).getTime() < now + 7*86400000).reduce((s, b) => s + b.amount, 0)
         const pendingPos = pos.filter(p => p.status === 'Pending' || p.status === 'Sent')
         const receivedPos = pos.filter(p => p.status === 'Received' || p.status === 'FullyReceived' || p.status === 'PartiallyReceived')
 
