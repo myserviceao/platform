@@ -300,7 +300,7 @@ public class DashboardController : ControllerBase
     {
         var tenantId = HttpContext.Session.GetInt32("tenantId");
         if (tenantId == null) return Unauthorized();
-        var raw = await _syncService.GetTagTypesRawAsync(tenantId.Value);
+        var raw = await _sync.GetTagTypesRawAsync(tenantId.Value);
         return Content(raw, "application/json");
     }
 
