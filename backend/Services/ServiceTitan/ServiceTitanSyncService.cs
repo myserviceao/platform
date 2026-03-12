@@ -66,7 +66,7 @@ public class ServiceTitanSyncService
             await _db.SaveChangesAsync();
 
 
-            // 3b. Sync Job Hold Reasons
+            // 3b. Sync Job Hold Reasons + Tag Mappings
             int holdReasonsSynced = 0;
             try
             {
@@ -92,9 +92,50 @@ public class ServiceTitanSyncService
             catch (Exception ex) { _logger.LogWarning(ex, "[Sync] Failed to sync hold reasons"); }
             _logger.LogInformation("[Sync] holdReasonsSynced={Count}", holdReasonsSynced);
 
-            var holdReasonIdMap = await _db.HoldReasons
-                .Where(h => h.TenantId == tenantId && h.Active)
-                .ToDictionaryAsync(h => h.StHoldReasonId, h => h.Name);
+            // 3c. Sync ST Tag Types and auto-map to hold reasons by name
+            try
+            {
+                var tagRaw = await _client.GetTagTypesAsync(token, stTenantId);
+                var tagDoc = JsonDocument.Parse(tagRaw);
+                if (tagDoc.RootElement.TryGetProperty("data", out var tagArr))
+                {
+                    var holdReasons = await _db.HoldReasons
+                        .Where(h => h.TenantId == tenantId && h.Active)
+                        .ToListAsync();
+
+                    foreach (var tag in tagArr.EnumerateArray())
+                    {
+                        var tagId = tag.GetProperty("id").GetInt64();
+                        var tagName = tag.TryGetProperty("name", out var tnProp) ? tnProp.GetString() ?? "" : "";
+
+                        // Auto-map: if tag name matches a hold reason name, link them
+                        var matchedReason = holdReasons.FirstOrDefault(h =>
+                            h.StTagTypeId == null &&
+                            h.Name.Equals(tagName, StringComparison.OrdinalIgnoreCase));
+                        if (matchedReason != null)
+                        {
+                            matchedReason.StTagTypeId = tagId;
+                            _logger.LogInformation("[Sync] Auto-mapped tag '{Tag}' (id={TagId}) to hold reason '{Reason}'", tagName, tagId, matchedReason.Name);
+                        }
+
+                        // Also check if any hold reason already has this tag mapped
+                        var alreadyMapped = holdReasons.FirstOrDefault(h => h.StTagTypeId == tagId);
+                        if (alreadyMapped != null && alreadyMapped.Name != tagName)
+                        {
+                            // Tag still exists, keep mapping
+                        }
+                    }
+                    await _db.SaveChangesAsync();
+                }
+            }
+            catch (Exception ex) { _logger.LogWarning(ex, "[Sync] Failed to sync tag types"); }
+
+            // Build tag-to-hold-reason lookup for job matching
+            var tagToHoldReason = await _db.HoldReasons
+                .Where(h => h.TenantId == tenantId && h.Active && h.StTagTypeId != null)
+                .ToDictionaryAsync(h => h.StTagTypeId!.Value, h => h.Name);
+
+            _logger.LogInformation("[Sync] Tag-to-hold-reason mappings: {Count}", tagToHoldReason.Count);
 
             // 4. Export all Jobs
             var pmDates = new Dictionary<long, DateTime>();
@@ -170,6 +211,16 @@ public class ServiceTitanSyncService
                             TotalAmount = totalAmount,
                             CreatedOn = createdOn,
                             UpdatedAt = DateTime.UtcNow
+                        ,
+                            HoldReasonName = status == "Hold" && tagToHoldReason.Count > 0
+                                ? (job.TryGetProperty("tagTypeIds", out var ntProp) && ntProp.ValueKind == JsonValueKind.Array
+                                    ? ntProp.EnumerateArray()
+                                        .Select(t => t.GetInt64())
+                                        .Where(t => tagToHoldReason.ContainsKey(t))
+                                        .Select(t => tagToHoldReason[t])
+                                        .FirstOrDefault()
+                                    : null)
+                                : null
                         });
                     }
                     else
@@ -181,6 +232,27 @@ public class ServiceTitanSyncService
                         existingJob.JobTypeName = jobTypeName;
                         existingJob.TotalAmount = totalAmount;
                         existingJob.UpdatedAt = DateTime.UtcNow;
+
+                        // Auto-assign hold reason from tags
+                        if (status == "Hold" && tagToHoldReason.Count > 0)
+                        {
+                            if (job.TryGetProperty("tagTypeIds", out var tagsProp) && tagsProp.ValueKind == JsonValueKind.Array)
+                            {
+                                foreach (var tagEl in tagsProp.EnumerateArray())
+                                {
+                                    var tagId = tagEl.GetInt64();
+                                    if (tagToHoldReason.TryGetValue(tagId, out var holdName))
+                                    {
+                                        existingJob.HoldReasonName = holdName;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        else if (status != "Hold")
+                        {
+                            existingJob.HoldReasonName = null; // clear if no longer on hold
+                        }
                     }
 
                     if (jobTypeName != null && PmKeywords.Any(k => jobTypeName.ToLower().Contains(k)))
