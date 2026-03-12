@@ -16,7 +16,7 @@ const STATUS_COLORS: Record<string, string> = {
 }
 
 export function ApPage() {
-  const [tab, setTab] = useState<'summary' | 'pos' | 'bills'>('summary')
+  const [tab, setTab] = useState<'summary' | 'pos' | 'bills'>('pos')
   const [summary, setSummary] = useState<ApSummary | null>(null)
   const [pos, setPos] = useState<PO[]>([])
   const [bills, setBills] = useState<Bill[]>([])
@@ -24,16 +24,25 @@ export function ApPage() {
   const [expandedPo, setExpandedPo] = useState<number | null>(null)
 
   useEffect(() => {
-    Promise.all([
-      fetch('/api/ap/summary', { credentials: 'include' }).then(r => r.json()),
-      fetch('/api/ap/purchase-orders', { credentials: 'include' }).then(r => r.json()),
-      fetch('/api/ap/bills-enhanced', { credentials: 'include' }).then(r => r.json()),
-    ]).then(([s, p, b]) => {
-      if (!s.error) setSummary(s)
-      if (Array.isArray(p)) setPos(p)
-      if (Array.isArray(b)) setBills(b)
-    }).catch(() => {})
-    .finally(() => setLoading(false))
+    const loadData = async () => {
+      try {
+        const [poR, billR] = await Promise.all([
+          fetch('/api/ap/purchase-orders', { credentials: 'include' }),
+          fetch('/api/ap/bills-enhanced', { credentials: 'include' }),
+        ])
+        const poData = await poR.json()
+        const billData = await billR.json()
+        if (Array.isArray(poData)) setPos(poData)
+        if (Array.isArray(billData)) setBills(billData)
+      } catch {}
+      try {
+        const sumR = await fetch('/api/ap/summary', { credentials: 'include' })
+        const sumData = await sumR.json()
+        if (!sumData.error) setSummary(sumData)
+      } catch {}
+      setLoading(false)
+    }
+    loadData()
   }, [])
 
   if (loading) return <div className="flex items-center justify-center py-20"><span className="loading loading-spinner loading-lg text-primary" /></div>
