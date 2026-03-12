@@ -16,5 +16,12 @@ public class ApBill
     public DateTime? PaidDate { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public long StApBillId { get; set; }
+    public long? StPurchaseOrderId { get; set; }
+    public string? Status { get; set; }       // Unreconciled, Reconciled, Discrepancy, Canceled
+    public string? Source { get; set; }       // Standalone, Purchasing, API, OCR
+    public string? ReferenceNumber { get; set; }
+    public string? Summary { get; set; }
+    public DateTime? BillDate { get; set; }
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }
