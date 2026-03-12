@@ -462,4 +462,22 @@ public class DashboardController : ControllerBase
         catch (Exception ex) { return Ok(new { error = ex.Message }); }
     }
 
+
+    [HttpGet("report-description/{category}/{reportId}")]
+    public async Task<IActionResult> GetReportDescription(string category, int reportId)
+    {
+        var tenantId = HttpContext.Session.GetInt32("tenantId");
+        if (tenantId == null) return Unauthorized();
+        try
+        {
+            var token = await _sync.GetTokenAsync(tenantId.Value);
+            var tenant = await _db.Tenants.FindAsync(tenantId.Value);
+            if (token == null || tenant == null) return BadRequest("No ST connection");
+            var client = HttpContext.RequestServices.GetRequiredService<MyServiceAO.Services.ServiceTitan.ServiceTitanClient>();
+            var raw = await client.GetReportDescriptionAsync(token, tenant.StTenantId, category, reportId);
+            return Content(raw, "application/json");
+        }
+        catch (Exception ex) { return Ok(new { error = ex.Message }); }
+    }
+
 }
