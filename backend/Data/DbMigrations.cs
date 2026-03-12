@@ -188,5 +188,9 @@ public static class DbMigrations
             ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""Theme"" text NULL;
         ");
 
+        await db.Database.ExecuteSqlRawAsync(@"
+            ALTER TABLE ""Appointments"" ADD COLUMN IF NOT EXISTS ""LocationName"" text NULL;
+        ");
+
     }
 }
