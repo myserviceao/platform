@@ -9,17 +9,12 @@ namespace MyServiceAO.Controllers;
 public class ProfileController : ControllerBase
 {
     private readonly AppDbContext _db;
-    private readonly IWebHostEnvironment _env;
 
-    public ProfileController(AppDbContext db, IWebHostEnvironment env)
+    public ProfileController(AppDbContext db)
     {
         _db = db;
-        _env = env;
     }
 
-    /// <summary>
-    /// PUT /api/profile/title - Update the user's display title
-    /// </summary>
     [HttpPut("title")]
     public async Task<IActionResult> UpdateTitle([FromBody] UpdateTitleRequest req)
     {
@@ -35,9 +30,6 @@ public class ProfileController : ControllerBase
         return Ok(new { user.Title });
     }
 
-    /// <summary>
-    /// POST /api/profile/logo - Upload a company logo image
-    /// </summary>
     [HttpPost("logo")]
     public async Task<IActionResult> UploadLogo(IFormFile file)
     {
@@ -54,33 +46,46 @@ public class ProfileController : ControllerBase
         if (ext != ".png" && ext != ".jpg" && ext != ".jpeg" && ext != ".webp" && ext != ".svg")
             return BadRequest(new { error = "Only PNG, JPG, WebP, and SVG are allowed" });
 
-        // Store in wwwroot/uploads/logos/
-        var uploadsDir = Path.Combine(_env.WebRootPath ?? "wwwroot", "uploads", "logos");
-        Directory.CreateDirectory(uploadsDir);
-
-        var fileName = $"tenant-{tenantId}{ext}";
-        var filePath = Path.Combine(uploadsDir, fileName);
-
-        using (var stream = new FileStream(filePath, FileMode.Create))
+        var contentType = ext switch
         {
-            await file.CopyToAsync(stream);
-        }
+            ".svg" => "image/svg+xml",
+            ".png" => "image/png",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".webp" => "image/webp",
+            _ => "application/octet-stream"
+        };
 
-        var logoUrl = $"/uploads/logos/{fileName}?v={DateTime.UtcNow.Ticks}";
+        // Read file to base64 and store in DB
+        using var ms = new MemoryStream();
+        await file.CopyToAsync(ms);
+        var base64 = Convert.ToBase64String(ms.ToArray());
 
         var tenant = await _db.Tenants.FindAsync(tenantId.Value);
-        if (tenant != null)
-        {
-            tenant.LogoUrl = logoUrl;
-            await _db.SaveChangesAsync();
-        }
+        if (tenant == null) return NotFound();
 
-        return Ok(new { logoUrl });
+        tenant.LogoData = base64;
+        tenant.LogoContentType = contentType;
+        tenant.LogoUrl = $"/api/profile/logo/{tenantId}?v={DateTime.UtcNow.Ticks}";
+        await _db.SaveChangesAsync();
+
+        return Ok(new { logoUrl = tenant.LogoUrl });
     }
 
     /// <summary>
-    /// DELETE /api/profile/logo - Remove the company logo
+    /// GET /api/profile/logo/{tenantId} - Serve the logo from DB
     /// </summary>
+    [HttpGet("logo/{tenantId}")]
+    [ResponseCache(Duration = 86400)]
+    public async Task<IActionResult> GetLogo(int tenantId)
+    {
+        var tenant = await _db.Tenants.FindAsync(tenantId);
+        if (tenant == null || string.IsNullOrEmpty(tenant.LogoData))
+            return NotFound();
+
+        var bytes = Convert.FromBase64String(tenant.LogoData);
+        return File(bytes, tenant.LogoContentType ?? "image/png");
+    }
+
     [HttpDelete("logo")]
     public async Task<IActionResult> DeleteLogo()
     {
@@ -91,6 +96,8 @@ public class ProfileController : ControllerBase
         if (tenant == null) return NotFound();
 
         tenant.LogoUrl = null;
+        tenant.LogoData = null;
+        tenant.LogoContentType = null;
         await _db.SaveChangesAsync();
 
         return Ok(new { logoUrl = (string?)null });
