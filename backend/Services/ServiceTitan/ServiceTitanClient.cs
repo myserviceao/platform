@@ -223,4 +223,12 @@ public class ServiceTitanClient
 
 
 
+
+    // GET appointments list filtered by status (list endpoint may return more fields than export)
+    public async Task<string> GetAppointmentsByStatusAsync(string accessToken, string stTenantId, string status, int page = 1)
+    {
+        var url = $"{BaseUrl}/jpm/v2/tenant/{stTenantId}/appointments?status={status}&page={page}&pageSize=50&active=True";
+        return await GetAsync(accessToken, url);
+    }
+
 }
