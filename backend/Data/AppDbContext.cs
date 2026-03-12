@@ -14,6 +14,8 @@ public class AppDbContext : DbContext
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<Job> Jobs => Set<Job>();
+    public DbSet<PurchaseOrder> PurchaseOrders { get; set; } = null!;
+    public DbSet<PurchaseOrderItem> PurchaseOrderItems { get; set; } = null!;
     public DbSet<Appointment> Appointments => Set<Appointment>();
     public DbSet<AppointmentTechnician> AppointmentTechnicians => Set<AppointmentTechnician>();
     public DbSet<Vendor> Vendors => Set<Vendor>();
