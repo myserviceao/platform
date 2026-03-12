@@ -8,10 +8,11 @@ namespace MyServiceAO.Controllers;
 public class AuthController : ControllerBase
 {
     private readonly AuthService _auth;
+    private readonly AppDbContext _db;
     private const string SessionKey = "userId";
     private const string TenantSessionKey = "tenantId";
 
-    public AuthController(AuthService auth)
+    public AuthController(AuthService auth, AppDbContext db)
     {
         _auth = auth;
     }
@@ -19,6 +20,39 @@ public class AuthController : ControllerBase
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest req)
     {
+        // Demo login: seed fresh demo data on each login
+        if (req.Email?.ToLower() == DemoSeeder.DemoEmail)
+        {
+            var demoUser = await DemoSeeder.EnsureDemoTenantAndUserAsync(_db);
+            if (!BCrypt.Net.BCrypt.Verify(req.Password, demoUser.PasswordHash))
+                return Unauthorized(new { error = "Invalid credentials." });
+
+            // Reset demo data on each login
+            await DemoSeeder.ResetDemoDataAsync(_db, demoUser.TenantId);
+
+            HttpContext.Session.SetInt32(SessionKey, demoUser.Id);
+            HttpContext.Session.SetInt32(TenantSessionKey, demoUser.TenantId);
+
+            return Ok(new
+            {
+                demoUser.Id,
+                demoUser.Email,
+                demoUser.FirstName,
+                demoUser.LastName,
+                demoUser.Role,
+                demoUser.Title,
+                Theme = demoUser.Theme ?? demoUser.Tenant.Theme ?? "black",
+                Tenant = new
+                {
+                    demoUser.Tenant.Id,
+                    demoUser.Tenant.Name,
+                    demoUser.Tenant.Slug,
+                    demoUser.Tenant.Theme,
+                    demoUser.Tenant.LogoUrl
+                }
+            });
+        }
+
         var user = await _auth.LoginAsync(req.Email, req.Password);
         if (user == null)
             return Unauthorized(new { error = "Invalid email or password." });
