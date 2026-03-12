@@ -407,4 +407,59 @@ public class DashboardController : ControllerBase
         catch (Exception ex) { return Ok(new { error = ex.Message }); }
     }
 
+
+    [HttpGet("report-categories")]
+    public async Task<IActionResult> GetReportCategories()
+    {
+        var tenantId = HttpContext.Session.GetInt32("tenantId");
+        if (tenantId == null) return Unauthorized();
+        try
+        {
+            var token = await _sync.GetTokenAsync(tenantId.Value);
+            var tenant = await _db.Tenants.FindAsync(tenantId.Value);
+            if (token == null || tenant == null) return BadRequest("No ST connection");
+            var client = HttpContext.RequestServices.GetRequiredService<MyServiceAO.Services.ServiceTitan.ServiceTitanClient>();
+            var raw = await client.GetReportCategoriesAsync(token, tenant.StTenantId);
+            return Content(raw, "application/json");
+        }
+        catch (Exception ex) { return Ok(new { error = ex.Message }); }
+    }
+
+    [HttpGet("reports/{category}")]
+    public async Task<IActionResult> GetReports(string category)
+    {
+        var tenantId = HttpContext.Session.GetInt32("tenantId");
+        if (tenantId == null) return Unauthorized();
+        try
+        {
+            var token = await _sync.GetTokenAsync(tenantId.Value);
+            var tenant = await _db.Tenants.FindAsync(tenantId.Value);
+            if (token == null || tenant == null) return BadRequest("No ST connection");
+            var client = HttpContext.RequestServices.GetRequiredService<MyServiceAO.Services.ServiceTitan.ServiceTitanClient>();
+            var raw = await client.GetReportsInCategoryAsync(token, tenant.StTenantId, category);
+            return Content(raw, "application/json");
+        }
+        catch (Exception ex) { return Ok(new { error = ex.Message }); }
+    }
+
+    [HttpPost("report-data/{category}/{reportId}")]
+    public async Task<IActionResult> GetReportData(string category, int reportId)
+    {
+        var tenantId = HttpContext.Session.GetInt32("tenantId");
+        if (tenantId == null) return Unauthorized();
+        try
+        {
+            var token = await _sync.GetTokenAsync(tenantId.Value);
+            var tenant = await _db.Tenants.FindAsync(tenantId.Value);
+            if (token == null || tenant == null) return BadRequest("No ST connection");
+            var client = HttpContext.RequestServices.GetRequiredService<MyServiceAO.Services.ServiceTitan.ServiceTitanClient>();
+            using var reader = new System.IO.StreamReader(Request.Body);
+            var body = await reader.ReadToEndAsync();
+            if (string.IsNullOrWhiteSpace(body)) body = "{}";
+            var raw = await client.GetReportDataAsync(token, tenant.StTenantId, category, reportId, body);
+            return Content(raw, "application/json");
+        }
+        catch (Exception ex) { return Ok(new { error = ex.Message }); }
+    }
+
 }
