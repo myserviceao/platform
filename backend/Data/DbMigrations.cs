@@ -245,5 +245,10 @@ public static class DbMigrations
             ALTER TABLE ""Vendors"" ADD COLUMN IF NOT EXISTS ""StVendorId"" bigint NOT NULL DEFAULT 0;
         ");
 
+        // Make VendorId nullable for AP bills from ST that may not have a matched vendor
+        await db.Database.ExecuteSqlRawAsync(@"
+            ALTER TABLE ""ApBills"" ALTER COLUMN ""VendorId"" DROP NOT NULL;
+        ");
+
     }
 }
