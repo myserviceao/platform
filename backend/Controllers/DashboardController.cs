@@ -372,4 +372,39 @@ public class DashboardController : ControllerBase
         }
     }
 
+
+    [HttpGet("export-job-notes")]
+    public async Task<IActionResult> GetExportJobNotes()
+    {
+        var tenantId = HttpContext.Session.GetInt32("tenantId");
+        if (tenantId == null) return Unauthorized();
+        try
+        {
+            var token = await _sync.GetTokenAsync(tenantId.Value);
+            var tenant = await _db.Tenants.FindAsync(tenantId.Value);
+            if (token == null || tenant == null) return BadRequest("No ST connection");
+            var client = HttpContext.RequestServices.GetRequiredService<MyServiceAO.Services.ServiceTitan.ServiceTitanClient>();
+            var raw = await client.GetJobNotesExportAsync(token, tenant.StTenantId);
+            return Content(raw, "application/json");
+        }
+        catch (Exception ex) { return Ok(new { error = ex.Message }); }
+    }
+
+    [HttpGet("export-job-history")]
+    public async Task<IActionResult> GetExportJobHistory()
+    {
+        var tenantId = HttpContext.Session.GetInt32("tenantId");
+        if (tenantId == null) return Unauthorized();
+        try
+        {
+            var token = await _sync.GetTokenAsync(tenantId.Value);
+            var tenant = await _db.Tenants.FindAsync(tenantId.Value);
+            if (token == null || tenant == null) return BadRequest("No ST connection");
+            var client = HttpContext.RequestServices.GetRequiredService<MyServiceAO.Services.ServiceTitan.ServiceTitanClient>();
+            var raw = await client.GetJobHistoryExportAsync(token, tenant.StTenantId);
+            return Content(raw, "application/json");
+        }
+        catch (Exception ex) { return Ok(new { error = ex.Message }); }
+    }
+
 }
