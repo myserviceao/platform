@@ -150,4 +150,13 @@ public class ServiceTitanOAuthService
             _cache.Remove(tenantId);
         }
     }
+
+    /// <summary>Forces a token refresh, bypassing cache. Call after a 401 error.</summary>
+    public async Task<string?> ForceRefreshAsync(int tenantId)
+    {
+        _logger.LogInformation("[OAuth] Force refresh requested tenantId={TenantId}", tenantId);
+        lock (_lock) { _cache.Remove(tenantId); }
+        return await GetValidTokenAsync(tenantId);
+    }
+
 }
