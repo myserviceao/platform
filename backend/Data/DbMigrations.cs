@@ -180,5 +180,9 @@ public static class DbMigrations
             ALTER TABLE ""Jobs"" ADD COLUMN IF NOT EXISTS ""TagTypeIds"" text NULL;
         ");
 
+        await db.Database.ExecuteSqlRawAsync(@"
+            ALTER TABLE ""HoldReasons"" ADD COLUMN IF NOT EXISTS ""StTagTypeId"" bigint NULL;
+        ");
+
     }
 }
