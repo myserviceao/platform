@@ -262,4 +262,44 @@ public class ServiceTitanClient
         return await GetAsync(accessToken, url);
     }
 
+
+    // Reporting API - list report categories
+    public async Task<string> GetReportCategoriesAsync(string accessToken, string stTenantId)
+    {
+        var url = $"{BaseUrl}/reporting/v2/tenant/{stTenantId}/report-categories?pageSize=200";
+        return await GetAsync(accessToken, url);
+    }
+
+    // Reporting API - list reports in a category
+    public async Task<string> GetReportsInCategoryAsync(string accessToken, string stTenantId, string category)
+    {
+        var url = $"{BaseUrl}/reporting/v2/tenant/{stTenantId}/report-category/{category}/reports?pageSize=200";
+        return await GetAsync(accessToken, url);
+    }
+
+    // Reporting API - get report data
+    public async Task<string> GetReportDataAsync(string accessToken, string stTenantId, string category, int reportId, string? requestBody = null)
+    {
+        var url = $"{BaseUrl}/reporting/v2/tenant/{stTenantId}/report-category/{category}/reports/{reportId}/data?pageSize=1000";
+        if (requestBody == null)
+        {
+            return await PostAsync(accessToken, url, "{}");
+        }
+        return await PostAsync(accessToken, url, requestBody);
+    }
+
+    // POST helper
+    private async Task<string> PostAsync(string accessToken, string url, string body)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, url);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        request.Headers.Add("ST-App-Key", _appKey);
+        request.Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
+        var response = await _http.SendAsync(request);
+        var responseBody = await response.Content.ReadAsStringAsync();
+        if (!response.IsSuccessStatusCode)
+            throw new Exception($"ST API error {(int)response.StatusCode}: {responseBody}");
+        return responseBody;
+    }
+
 }
