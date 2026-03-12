@@ -293,6 +293,70 @@ public class ServiceTitanSyncService
             _logger.LogInformation("[Sync] tenantId={TenantId} pmFound={PmFound} uniquePmCustomers={Count}", tenantId, pmFound, pmDates.Count);
 
 
+
+            // 4d. Resolve hold reasons from job history
+            // The "Job Hold" event in job history contains the hold reason name in the memo field
+            var holdJobsToResolve = await _db.Jobs
+                .Where(j => j.TenantId == tenantId && j.Status == "Hold" && j.HoldReasonName == null)
+                .ToListAsync();
+
+            if (holdJobsToResolve.Count > 0)
+            {
+                _logger.LogInformation("[Sync] Resolving hold reasons from job history for {Count} jobs", holdJobsToResolve.Count);
+                int historyResolved = 0;
+
+                foreach (var hj in holdJobsToResolve)
+                {
+                    try
+                    {
+                        var histRaw = await _client.GetJobHistoryAsync(token, stTenantId, hj.StJobId);
+                        var histDoc = JsonDocument.Parse(histRaw);
+                        if (histDoc.RootElement.TryGetProperty("history", out var histArr))
+                        {
+                            // Find the most recent "Job Hold" event with a memo
+                            string? holdReason = null;
+                            DateTime latest = DateTime.MinValue;
+                            foreach (var evt in histArr.EnumerateArray())
+                            {
+                                var eventType = evt.TryGetProperty("eventType", out var etProp) ? etProp.GetString() : "";
+                                if (eventType != "Job Hold") continue;
+                                var memo = evt.TryGetProperty("memo", out var mProp) ? mProp.GetString() : null;
+                                if (string.IsNullOrWhiteSpace(memo)) continue;
+                                var date = evt.TryGetProperty("date", out var dProp) && dProp.ValueKind == JsonValueKind.String
+                                    ? DateTime.Parse(dProp.GetString()!) : DateTime.MinValue;
+                                if (date > latest) { latest = date; holdReason = memo; }
+                            }
+
+                            if (holdReason != null)
+                            {
+                                hj.HoldReasonName = holdReason;
+                                historyResolved++;
+                                _logger.LogInformation("[Sync] Job #{JobNum}: hold reason = {Reason} (from history)", hj.JobNumber, holdReason);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "[Sync] Failed to get history for job {JobNum}", hj.JobNumber);
+                    }
+                }
+
+                if (historyResolved > 0)
+                    await _db.SaveChangesAsync();
+                _logger.LogInformation("[Sync] Resolved {Resolved}/{Total} hold reasons from history", historyResolved, holdJobsToResolve.Count);
+            }
+
+            // Also clear hold reason for jobs no longer on hold
+            var noLongerHold = await _db.Jobs
+                .Where(j => j.TenantId == tenantId && j.Status != "Hold" && j.HoldReasonName != null)
+                .ToListAsync();
+            if (noLongerHold.Count > 0)
+            {
+                foreach (var j in noLongerHold) j.HoldReasonName = null;
+                await _db.SaveChangesAsync();
+                _logger.LogInformation("[Sync] Cleared hold reason for {Count} jobs no longer on hold", noLongerHold.Count);
+            }
+
             // 5. Upsert PmCustomers
             foreach (var (stCustomerId, lastPmDate) in pmDates)
             {
