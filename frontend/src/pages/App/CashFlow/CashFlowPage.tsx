@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Line, ComposedChart, ReferenceLine } from 'recharts'
+import { XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Bar, Line, ComposedChart, ReferenceLine } from 'recharts'
 
 interface ForecastWeek {
   week: number
@@ -66,20 +66,18 @@ export function CashFlowPage() {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-base-content">Cash Flow Forecast</h1>
           <p className="text-sm text-base-content/50">8-week projected cash inflows & outflows</p>
         </div>
-        <div className={`text-right`}>
+        <div className="text-right">
           <div className="text-xs text-base-content/40 uppercase tracking-wide">8-Week Net Flow</div>
           <div className={`text-2xl font-bold ${healthColor}`}>{fmt(netFlow)}</div>
           <div className={`text-xs ${healthColor}`}>{healthLabel} Cash Flow</div>
         </div>
       </div>
 
-      {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="card bg-base-100 shadow-sm">
           <div className="card-body p-4">
@@ -111,7 +109,6 @@ export function CashFlowPage() {
         </div>
       </div>
 
-      {/* Main Chart */}
       <div className="card bg-base-100 shadow-sm">
         <div className="card-body p-4">
           <h2 className="font-semibold text-sm text-base-content mb-4">Weekly Cash Flow Breakdown</h2>
@@ -120,10 +117,10 @@ export function CashFlowPage() {
               <ComposedChart data={chartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="currentColor" opacity={0.1} />
                 <XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="currentColor" opacity={0.4} />
-                <YAxis tickFormatter={(v) => fmtK(Math.abs(v))} tick={{ fontSize: 11 }} stroke="currentColor" opacity={0.4} />
+                <YAxis tickFormatter={(v: number) => fmtK(Math.abs(v))} tick={{ fontSize: 11 }} stroke="currentColor" opacity={0.4} />
                 <Tooltip
                   formatter={(value: number, name: string) => [fmt(Math.abs(value)), name]}
-                  contentStyle={{ backgroundColor: 'oklch(var(--b1))', border: '1px solid oklch(var(--bc) / 0.1)', borderRadius: '8px', fontSize: '12px' }}
+                  contentStyle={{ backgroundColor: 'var(--fallback-b1, oklch(var(--b1)))', border: '1px solid rgba(128,128,128,0.2)', borderRadius: '8px', fontSize: '12px' }}
                   labelStyle={{ fontWeight: 600, marginBottom: 4 }}
                 />
                 <Legend wrapperStyle={{ fontSize: '11px' }} />
@@ -138,7 +135,6 @@ export function CashFlowPage() {
         </div>
       </div>
 
-      {/* Weekly Detail Table */}
       <div className="card bg-base-100 shadow-sm">
         <div className="card-body p-0">
           <div className="px-4 pt-4 pb-3 border-b border-base-200">
