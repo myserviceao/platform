@@ -177,6 +177,16 @@ public class ServiceTitanSyncService
                     if (job.TryGetProperty("jobTypeId", out var jtProp) && jtProp.ValueKind == JsonValueKind.Number)
                         jobTypeMap.TryGetValue(jtProp.GetInt64(), out jobTypeName);
 
+                    // Parse tagTypeIds
+                    string? tagTypeIdsStr = null;
+                    if (job.TryGetProperty("tagTypeIds", out var tagsProp) && tagsProp.ValueKind == JsonValueKind.Array)
+                    {
+                        var tagIds = new List<string>();
+                        foreach (var t in tagsProp.EnumerateArray())
+                            if (t.ValueKind == JsonValueKind.Number) tagIds.Add(t.GetInt64().ToString());
+                        tagTypeIdsStr = tagIds.Count > 0 ? string.Join(",", tagIds) : null;
+                    }
+
                     // ST export returns total as a decimal number
                     decimal totalAmount = 0;
                     if (job.TryGetProperty("total", out var totProp))
@@ -231,6 +241,7 @@ public class ServiceTitanSyncService
                         existingJob.Status = status;
                         existingJob.JobTypeName = jobTypeName;
                         existingJob.TotalAmount = totalAmount;
+                        existingJob.TagTypeIds = tagTypeIdsStr;
                         existingJob.UpdatedAt = DateTime.UtcNow;
 
                         // Auto-assign hold reason from tags
