@@ -239,4 +239,94 @@ public class CreateBillRequest
     public string? InvoiceNumber { get; set; }
     public decimal Amount { get; set; }
     public DateTime DueDate { get; set; }
+
+    // ── Purchase Orders ────────────────────────────────────────
+
+    [HttpGet("purchase-orders")]
+    public async Task<IActionResult> GetPurchaseOrders()
+    {
+        var tenantId = HttpContext.Session.GetInt32("tenantId");
+        if (tenantId == null) return Unauthorized();
+
+        var pos = await _db.PurchaseOrders
+            .Where(p => p.TenantId == tenantId.Value)
+            .OrderByDescending(p => p.Date)
+            .Include(p => p.Items)
+            .Select(p => new
+            {
+                p.Id, p.StPurchaseOrderId, p.Number, p.Status, p.VendorName,
+                p.JobNumber, p.Total, p.Tax, p.Shipping, p.Summary,
+                p.Date, p.RequiredOn, p.SentOn, p.ReceivedOn,
+                ItemCount = p.Items.Count,
+                Items = p.Items.Select(i => new
+                {
+                    i.SkuName, i.SkuCode, i.Description,
+                    i.Quantity, i.QuantityReceived, i.Cost, i.Total, i.Status
+                })
+            })
+            .ToListAsync();
+
+        return Ok(pos);
+    }
+
+    // ── Enhanced Bills ─────────────────────────────────────────
+
+    [HttpGet("bills-enhanced")]
+    public async Task<IActionResult> GetBillsEnhanced()
+    {
+        var tenantId = HttpContext.Session.GetInt32("tenantId");
+        if (tenantId == null) return Unauthorized();
+
+        var bills = await _db.ApBills
+            .Where(b => b.TenantId == tenantId.Value)
+            .Include(b => b.Vendor)
+            .OrderByDescending(b => b.DueDate)
+            .Select(b => new
+            {
+                b.Id, b.StApBillId, b.InvoiceNumber, b.Amount, b.DueDate,
+                b.IsPaid, b.PaidDate, b.StPurchaseOrderId,
+                b.Status, b.Source, b.ReferenceNumber, b.Summary, b.BillDate,
+                VendorName = b.Vendor != null ? b.Vendor.Name : ""
+            })
+            .ToListAsync();
+
+        return Ok(bills);
+    }
+
+    // ── AP Summary ─────────────────────────────────────────────
+
+    [HttpGet("summary")]
+    public async Task<IActionResult> GetApSummary()
+    {
+        var tenantId = HttpContext.Session.GetInt32("tenantId");
+        if (tenantId == null) return Unauthorized();
+
+        var unpaid = await _db.ApBills
+            .Where(b => b.TenantId == tenantId.Value && !b.IsPaid)
+            .ToListAsync();
+
+        var pos = await _db.PurchaseOrders
+            .Where(p => p.TenantId == tenantId.Value)
+            .ToListAsync();
+
+        var now = DateTime.UtcNow;
+
+        return Ok(new
+        {
+            TotalUnpaid = unpaid.Sum(b => b.Amount),
+            BillCount = unpaid.Count,
+            OverdueCount = unpaid.Count(b => b.DueDate < now),
+            OverdueAmount = unpaid.Where(b => b.DueDate < now).Sum(b => b.Amount),
+            DueThisWeek = unpaid.Where(b => b.DueDate >= now && b.DueDate < now.AddDays(7)).Sum(b => b.Amount),
+            DueThisMonth = unpaid.Where(b => b.DueDate >= now && b.DueDate < now.AddDays(30)).Sum(b => b.Amount),
+            PoCount = pos.Count,
+            OpenPoCount = pos.Count(p => p.Status != "Closed" && p.Status != "Canceled"),
+            OpenPoTotal = pos.Where(p => p.Status != "Closed" && p.Status != "Canceled").Sum(p => p.Total),
+            ByVendor = unpaid.GroupBy(b => b.Vendor?.Name ?? "Unknown")
+                .Select(g => new { Vendor = g.Key, Total = g.Sum(b => b.Amount), Count = g.Count() })
+                .OrderByDescending(g => g.Total)
+                .ToList()
+        });
+    }
+
 }
