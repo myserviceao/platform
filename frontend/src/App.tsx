@@ -57,6 +57,7 @@ function AppRoutes() {
                       <Route path="wo-board" element={<WoBoardPage />} />
                       <Route path="hold-board" element={<HoldBoardPage />} />
                       <Route path="ap" element={<ApPage />} />
+                      <Route path="cash-flow" element={<CashFlowPage />} />
                       <Route path="settings" element={<SettingsPage />} />
                       <Route path="customers" element={<CustomersPage />} />
                       <Route path="customers/:id" element={<CustomerDetailPage />} />
