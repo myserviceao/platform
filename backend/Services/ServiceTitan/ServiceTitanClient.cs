@@ -288,6 +288,14 @@ public class ServiceTitanClient
         return await PostAsync(accessToken, url, requestBody);
     }
 
+
+    // Reporting API - get report description (parameters and fields)
+    public async Task<string> GetReportDescriptionAsync(string accessToken, string stTenantId, string category, int reportId)
+    {
+        var url = $"{BaseUrl}/reporting/v2/tenant/{stTenantId}/report-category/{category}/reports/{reportId}";
+        return await GetAsync(accessToken, url);
+    }
+
     // POST helper
     private async Task<string> PostAsync(string accessToken, string url, string body)
     {
