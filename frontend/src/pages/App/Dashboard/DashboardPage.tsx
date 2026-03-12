@@ -281,7 +281,7 @@ export function DashboardPage() {
       </div>
 
       {/* ── Weather + Schedule ── */}
-      <div className="grid grid-cols-1 xl:grid-cols-[300px_1fr] gap-3">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
         <WeatherCard />
         <div className="card bg-base-100 shadow-sm">
         <div className="card-body p-0">
@@ -315,6 +315,12 @@ export function DashboardPage() {
 
           {activeSchedule && activeSchedule.items.length > 0 ? (
             <div className="divide-y divide-base-200">
+              <div className="flex items-center gap-3 px-4 py-2 text-[10px] uppercase tracking-wider text-base-content/40 font-semibold">
+                <span className="w-36 shrink-0">Technician</span>
+                <span className="w-14 shrink-0">Job</span>
+                <span className="flex-1">Location</span>
+                <span className="shrink-0">Time</span>
+              </div>
               {(() => {
                 const techMap = new Map<string, typeof activeSchedule.items>()
                 activeSchedule.items.forEach(item => {
