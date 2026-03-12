@@ -125,6 +125,7 @@ public class DashboardController : ControllerBase
                 {
                     a.JobNumber,
                     a.CustomerName,
+                    LocationName = a.LocationName ?? a.CustomerName,
                     Start = a.Start,
                     Techs = a.Technicians.Select(t => t.TechnicianName).ToList()
                 })
