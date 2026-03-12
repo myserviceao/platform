@@ -16,6 +16,7 @@ public class AuthController : ControllerBase
     public AuthController(AuthService auth, AppDbContext db)
     {
         _auth = auth;
+        _db = db;
     }
 
     [HttpPost("login")]
