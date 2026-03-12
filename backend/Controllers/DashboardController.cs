@@ -330,4 +330,25 @@ public class DashboardController : ControllerBase
         return Content(raw, "application/json");
     }
 
+
+    [HttpGet("appointment-hold/{appointmentId}")]
+    public async Task<IActionResult> GetAppointmentHold(long appointmentId)
+    {
+        var tenantId = HttpContext.Session.GetInt32("tenantId");
+        if (tenantId == null) return Unauthorized();
+        try
+        {
+            var token = await _sync.GetTokenAsync(tenantId.Value);
+            var tenant = await _db.Tenants.FindAsync(tenantId.Value);
+            if (token == null || tenant == null) return BadRequest("No ST connection");
+            var client = HttpContext.RequestServices.GetRequiredService<MyServiceAO.Services.ServiceTitan.ServiceTitanClient>();
+            var raw = await client.GetAppointmentHoldAsync(token, tenant.StTenantId, appointmentId);
+            return Content(raw, "application/json");
+        }
+        catch (Exception ex)
+        {
+            return Ok(new { error = ex.Message });
+        }
+    }
+
 }
