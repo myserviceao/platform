@@ -187,7 +187,7 @@ public class ApController : ControllerBase
 
     // ── Dashboard summary ──────────────────────────────────────
 
-    [HttpGet("summary")]
+    [HttpGet("ap-summary")]
     public async Task<IActionResult> GetSummary()
     {
         var tenantId = HttpContext.Session.GetInt32("tenantId");
