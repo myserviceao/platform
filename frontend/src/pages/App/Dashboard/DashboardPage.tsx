@@ -43,6 +43,7 @@ interface ApSummary {
 interface ScheduleItem {
   jobNumber: string
   customerName: string
+  locationName: string
   start: string
   techs: string[]
 }
@@ -326,31 +327,37 @@ export function DashboardPage() {
           </div>
 
           {activeSchedule && activeSchedule.items.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="table table-sm">
-                <thead>
-                  <tr className="text-xs text-base-content/40 uppercase">
-                    <th>Technician</th>
-                    <th>Job #</th>
-                    <th>Customer</th>
-                    <th>Time</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {activeSchedule.items.map((item, i) => (
-                    <tr key={i} className="hover:bg-base-200/40">
-                      <td className="text-sm">
-                        {item.techs?.length > 0
-                          ? item.techs.join(', ')
-                          : <span className="text-base-content/30 italic">Unassigned</span>}
-                      </td>
-                      <td className="text-sm font-mono text-primary">{item.jobNumber || '—'}</td>
-                      <td className="text-sm font-medium">{item.customerName}</td>
-                      <td className="text-sm text-base-content/60">{fmtTime(item.start)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="divide-y divide-base-200">
+              {(() => {
+                // Group appointments by technician
+                const techMap = new Map<string, typeof activeSchedule.items>()
+                activeSchedule.items.forEach(item => {
+                  const techName = item.techs?.length > 0 ? item.techs.join(', ') : 'Unassigned'
+                  if (!techMap.has(techName)) techMap.set(techName, [])
+                  techMap.get(techName)!.push(item)
+                })
+                return Array.from(techMap.entries()).map(([tech, items]) => (
+                  <details key={tech} className="group" open={techMap.size <= 3}>
+                    <summary className="flex items-center justify-between px-4 py-2.5 cursor-pointer hover:bg-base-200/40 list-none">
+                      <div className="flex items-center gap-2">
+                        <span className="icon-[tabler--chevron-right] size-4 text-base-content/30 transition-transform group-open:rotate-90" />
+                        <span className="icon-[tabler--user] size-4 text-base-content/40" />
+                        <span className={'text-sm font-medium ' + (tech === 'Unassigned' ? 'text-base-content/30 italic' : 'text-base-content')}>{tech}</span>
+                      </div>
+                      <span className="badge badge-sm badge-ghost">{items.length}</span>
+                    </summary>
+                    <div className="pb-1">
+                      {items.map((item, i) => (
+                        <div key={i} className="flex items-center gap-3 px-4 pl-12 py-2 hover:bg-base-200/30 text-sm">
+                          <span className="font-mono text-primary text-xs shrink-0">#{item.jobNumber}</span>
+                          <span className="font-medium truncate flex-1">{item.locationName || item.customerName}</span>
+                          <span className="text-base-content/50 text-xs shrink-0">{fmtTime(item.start)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                ))
+              })()}
             </div>
           ) : (
             <p className="text-sm text-base-content/40 px-4 py-4">No appointments scheduled</p>
