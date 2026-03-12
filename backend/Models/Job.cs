@@ -13,6 +13,7 @@ public class Job
     public string Status { get; set; } = "";
     public string? JobTypeName { get; set; }
     public string? HoldReasonName { get; set; }
+    public string? TagTypeIds { get; set; } // Comma-separated ST tag IDs
 
     public decimal TotalAmount { get; set; }
 
