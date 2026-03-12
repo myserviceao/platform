@@ -6,6 +6,8 @@ public class Tenant
     public string Slug { get; set; } = "";          // e.g. "acme-hvac"
     public string Name { get; set; } = "";          // e.g. "Acme HVAC"
     public string? LogoUrl { get; set; }
+    public string? LogoData { get; set; }           // Base64-encoded logo image
+    public string? LogoContentType { get; set; }    // e.g. "image/svg+xml"
     public string? Theme { get; set; } = "dark";
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
