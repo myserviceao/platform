@@ -92,6 +92,11 @@ const navItems: NavEntry[] = [
   },
   {
     label: 'Accounts Payable',
+  },
+  {
+    to: '/app/cash-flow',
+    icon: 'icon-[tabler--chart-line]',
+    label: 'Cash Flow',
     icon: 'icon-[tabler--receipt]',
     path: '/app/ap',
   },
@@ -120,6 +125,7 @@ const pageResults: SearchResult[] = [
   { type: 'page', label: 'Settings', path: '/app/settings' },
   { type: 'page', label: 'ServiceTitan', path: '/app/servicetitan' },
   { type: 'page', label: 'AR Alerts', path: '/app/ar-alerts' },
+  { type: 'page', label: 'Cash Flow', path: '/app/cash-flow' },
 ]
 
 function GlobalSearch() {
