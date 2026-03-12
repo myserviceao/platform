@@ -222,11 +222,5 @@ public class ServiceTitanClient
     }
 
 
-    // GET tag types from ST settings API
-    public async Task<string> GetTagTypesAsync(string accessToken, string stTenantId)
-    {
-        var url = $"{BaseUrl}/settings/v2/tenant/{stTenantId}/tag-types?pageSize=200&active=True";
-        return await GetAsync(accessToken, url);
-    }
 
 }
