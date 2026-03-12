@@ -239,4 +239,12 @@ public class ServiceTitanClient
         return await GetAsync(accessToken, url);
     }
 
+
+    // GET job notes
+    public async Task<string> GetJobNotesAsync(string accessToken, string stTenantId, long jobId)
+    {
+        var url = $"{BaseUrl}/jpm/v2/tenant/{stTenantId}/jobs/{jobId}/notes?pageSize=50";
+        return await GetAsync(accessToken, url);
+    }
+
 }
