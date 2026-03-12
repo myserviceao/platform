@@ -97,7 +97,7 @@ public static class DemoSeeder
             {
                 TenantId = tenantId,
                 StCustomerId = 90000000 + i,
-                Name = customerData[i].Name,
+                LocationName = customerData[i].Name,
                 UpdatedAt = now
             };
             db.Customers.Add(c);
@@ -107,9 +107,9 @@ public static class DemoSeeder
             {
                 TenantId = tenantId,
                 StLocationId = 90000000 + i,
-                ServiceTitanLocationId = 90000000 + i,
+                
                 StCustomerId = c.StCustomerId,
-                Name = customerData[i].Name,
+                LocationName = customerData[i].Name,
                 Street = customerData[i].Address.Split(',')[0],
                 City = customerData[i].Address.Contains(',') ? customerData[i].Address.Split(',')[1].Trim().Split(' ')[0] : "Houston",
                 State = "TX"
@@ -274,7 +274,6 @@ public static class DemoSeeder
                 CustomerName = customers[i].Name,
                 PmStatus = pmStatuses[i % pmStatuses.Length],
                 LastPmDate = pmStatuses[i % pmStatuses.Length] == "Overdue" ? now.AddDays(-Rng.Next(120, 300)) : now.AddDays(-Rng.Next(10, 90)),
-                NextPmDue = pmStatuses[i % pmStatuses.Length] == "Overdue" ? now.AddDays(-Rng.Next(10, 60)) : now.AddDays(Rng.Next(10, 90))
             });
         }
         await db.SaveChangesAsync();
