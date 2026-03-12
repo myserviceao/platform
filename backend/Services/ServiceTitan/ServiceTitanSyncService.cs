@@ -658,6 +658,15 @@ public class ServiceTitanSyncService
         return await _client.GetAppointmentAsync(token, tenant.StTenantId, appointmentId);
     }
 
+    public async Task<string> GetTagTypesRawAsync(int tenantId)
+    {
+        var token = await _oauth.GetValidTokenAsync(tenantId);
+        if (token == null) return "{}";
+        var tenant = await _db.Tenants.FindAsync(tenantId);
+        if (tenant == null) return "{}";
+        return await _client.GetTagTypesAsync(token, tenant.StTenantId);
+    }
+
 }
 
 public class SyncResult
