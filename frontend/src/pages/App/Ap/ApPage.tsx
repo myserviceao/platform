@@ -54,37 +54,52 @@ export function ApPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-base-content">Accounts Payable & Purchasing</h1>
         <div className="text-right">
-          <div className="text-xs text-base-content/40">Total Unpaid</div>
-          <div className="text-2xl font-bold text-error">{fmt(summary?.totalUnpaid ?? 0)}</div>
+          <div className="text-xs text-base-content/40">Open PO Value</div>
+          <div className="text-2xl font-bold text-info">{fmt(pos.filter(p => p.status !== "Closed" && p.status !== "Canceled").reduce((s, p) => s + p.total, 0))}</div>
         </div>
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        <div className="card bg-base-100 shadow-sm"><div className="card-body p-3">
-          <div className="text-[10px] text-base-content/40 uppercase">Unpaid Bills</div>
-          <div className="text-lg font-bold text-error">{fmt(summary?.totalUnpaid ?? 0)}</div>
-          <div className="text-xs text-base-content/50">{summary?.billCount ?? 0} bills</div>
-        </div></div>
-        <div className="card bg-base-100 shadow-sm"><div className="card-body p-3">
-          <div className="text-[10px] text-base-content/40 uppercase">Overdue</div>
-          <div className="text-lg font-bold text-error">{fmt(summary?.overdueAmount ?? 0)}</div>
-          <div className="text-xs text-base-content/50">{summary?.overdueCount ?? 0} past due</div>
-        </div></div>
-        <div className="card bg-base-100 shadow-sm"><div className="card-body p-3">
-          <div className="text-[10px] text-base-content/40 uppercase">Due This Week</div>
-          <div className="text-lg font-bold text-warning">{fmt(summary?.dueThisWeek ?? 0)}</div>
-        </div></div>
-        <div className="card bg-base-100 shadow-sm"><div className="card-body p-3">
-          <div className="text-[10px] text-base-content/40 uppercase">Open POs</div>
-          <div className="text-lg font-bold text-info">{summary?.openPoCount ?? 0}</div>
-          <div className="text-xs text-base-content/50">{fmt(summary?.openPoTotal ?? 0)}</div>
-        </div></div>
-        <div className="card bg-base-100 shadow-sm"><div className="card-body p-3">
-          <div className="text-[10px] text-base-content/40 uppercase">Due This Month</div>
-          <div className="text-lg font-bold text-warning">{fmt(summary?.dueThisMonth ?? 0)}</div>
-        </div></div>
-      </div>
+      {(() => {
+        const openPos = pos.filter(p => p.status !== 'Closed' && p.status !== 'Canceled')
+        const openPoTotal = openPos.reduce((s, p) => s + p.total, 0)
+        const unpaidBillTotal = bills.filter(b => !b.isPaid).reduce((s, b) => s + b.amount, 0)
+        const now = Date.now()
+        const overdueBills = bills.filter(b => !b.isPaid && new Date(b.dueDate).getTime() < now)
+        const dueThisWeek = bills.filter(b => !b.isPaid && new Date(b.dueDate).getTime() >= now && new Date(b.dueDate).getTime() < now + 7*86400000).reduce((s, b) => s + b.amount, 0)
+        const pendingPos = pos.filter(p => p.status === 'Pending' || p.status === 'Sent')
+        const receivedPos = pos.filter(p => p.status === 'Received' || p.status === 'FullyReceived' || p.status === 'PartiallyReceived')
+
+        return (
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            <div className="card bg-base-100 shadow-sm"><div className="card-body p-3">
+              <div className="text-[10px] text-base-content/40 uppercase">Open POs</div>
+              <div className="text-lg font-bold text-info">{openPos.length}</div>
+              <div className="text-xs text-base-content/50">{fmt(openPoTotal)} total</div>
+            </div></div>
+            <div className="card bg-base-100 shadow-sm"><div className="card-body p-3">
+              <div className="text-[10px] text-base-content/40 uppercase">Pending / Sent</div>
+              <div className="text-lg font-bold text-warning">{pendingPos.length}</div>
+              <div className="text-xs text-base-content/50">{fmt(pendingPos.reduce((s, p) => s + p.total, 0))}</div>
+            </div></div>
+            <div className="card bg-base-100 shadow-sm"><div className="card-body p-3">
+              <div className="text-[10px] text-base-content/40 uppercase">Received</div>
+              <div className="text-lg font-bold text-success">{receivedPos.length}</div>
+              <div className="text-xs text-base-content/50">{fmt(receivedPos.reduce((s, p) => s + p.total, 0))}</div>
+            </div></div>
+            <div className="card bg-base-100 shadow-sm"><div className="card-body p-3">
+              <div className="text-[10px] text-base-content/40 uppercase">Unpaid Bills</div>
+              <div className="text-lg font-bold text-error">{fmt(unpaidBillTotal)}</div>
+              <div className="text-xs text-base-content/50">{overdueBills.length} overdue</div>
+            </div></div>
+            <div className="card bg-base-100 shadow-sm"><div className="card-body p-3">
+              <div className="text-[10px] text-base-content/40 uppercase">Total POs</div>
+              <div className="text-lg font-bold text-base-content">{pos.length}</div>
+              <div className="text-xs text-base-content/50">{fmt(pos.reduce((s, p) => s + p.total, 0))}</div>
+            </div></div>
+          </div>
+        )
+      })()}
 
       {/* Tabs */}
       <div className="card bg-base-100 shadow-sm">
