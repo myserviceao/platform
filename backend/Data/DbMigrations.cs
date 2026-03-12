@@ -197,5 +197,53 @@ public static class DbMigrations
             ALTER TABLE ""Tenants"" ADD COLUMN IF NOT EXISTS ""LogoContentType"" text NULL;
         ");
 
+        await db.Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS ""PurchaseOrders"" (
+                ""Id"" serial PRIMARY KEY,
+                ""TenantId"" integer NOT NULL REFERENCES ""Tenants""(""Id""),
+                ""StPurchaseOrderId"" bigint NOT NULL DEFAULT 0,
+                ""Number"" text NOT NULL DEFAULT '',
+                ""Status"" text NOT NULL DEFAULT '',
+                ""VendorName"" text NOT NULL DEFAULT '',
+                ""StVendorId"" bigint NOT NULL DEFAULT 0,
+                ""StJobId"" bigint,
+                ""JobNumber"" text,
+                ""Total"" numeric NOT NULL DEFAULT 0,
+                ""Tax"" numeric NOT NULL DEFAULT 0,
+                ""Shipping"" numeric NOT NULL DEFAULT 0,
+                ""Summary"" text,
+                ""Date"" timestamp NOT NULL DEFAULT NOW(),
+                ""RequiredOn"" timestamp,
+                ""SentOn"" timestamp,
+                ""ReceivedOn"" timestamp,
+                ""UpdatedAt"" timestamp NOT NULL DEFAULT NOW()
+            );
+            CREATE TABLE IF NOT EXISTS ""PurchaseOrderItems"" (
+                ""Id"" serial PRIMARY KEY,
+                ""PurchaseOrderId"" integer NOT NULL REFERENCES ""PurchaseOrders""(""Id"") ON DELETE CASCADE,
+                ""StItemId"" bigint NOT NULL DEFAULT 0,
+                ""SkuName"" text NOT NULL DEFAULT '',
+                ""SkuCode"" text NOT NULL DEFAULT '',
+                ""Description"" text,
+                ""Quantity"" numeric NOT NULL DEFAULT 0,
+                ""QuantityReceived"" numeric NOT NULL DEFAULT 0,
+                ""Cost"" numeric NOT NULL DEFAULT 0,
+                ""Total"" numeric NOT NULL DEFAULT 0,
+                ""Status"" text NOT NULL DEFAULT ''
+            );
+        ");
+
+        // Also enhance existing ApBills with ST fields
+        await db.Database.ExecuteSqlRawAsync(@"
+            ALTER TABLE ""ApBills"" ADD COLUMN IF NOT EXISTS ""StApBillId"" bigint NOT NULL DEFAULT 0;
+            ALTER TABLE ""ApBills"" ADD COLUMN IF NOT EXISTS ""StPurchaseOrderId"" bigint;
+            ALTER TABLE ""ApBills"" ADD COLUMN IF NOT EXISTS ""Status"" text;
+            ALTER TABLE ""ApBills"" ADD COLUMN IF NOT EXISTS ""Source"" text;
+            ALTER TABLE ""ApBills"" ADD COLUMN IF NOT EXISTS ""ReferenceNumber"" text;
+            ALTER TABLE ""ApBills"" ADD COLUMN IF NOT EXISTS ""Summary"" text;
+            ALTER TABLE ""ApBills"" ADD COLUMN IF NOT EXISTS ""BillDate"" timestamp;
+            ALTER TABLE ""Vendors"" ADD COLUMN IF NOT EXISTS ""StVendorId"" bigint NOT NULL DEFAULT 0;
+        ");
+
     }
 }
