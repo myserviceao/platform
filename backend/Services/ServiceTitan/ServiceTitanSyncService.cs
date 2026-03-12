@@ -618,6 +618,7 @@ public class ServiceTitanSyncService
                             StJobId = stJobId,
                             JobNumber = matchedJob?.JobNumber ?? "",
                             CustomerName = matchedJob?.CustomerName ?? "",
+                            LocationName = matchedJob?.CustomerName ?? "",
                             Status = apptStatus,
                             Start = apptStart,
                             UpdatedAt = DateTime.UtcNow
@@ -629,6 +630,7 @@ public class ServiceTitanSyncService
                         existing.StJobId = stJobId;
                         existing.JobNumber = matchedJob?.JobNumber ?? existing.JobNumber;
                         existing.CustomerName = matchedJob?.CustomerName ?? existing.CustomerName;
+                        existing.LocationName = matchedJob?.CustomerName ?? existing.LocationName;
                         existing.Status = apptStatus;
                         existing.Start = apptStart;
                         existing.UpdatedAt = DateTime.UtcNow;
