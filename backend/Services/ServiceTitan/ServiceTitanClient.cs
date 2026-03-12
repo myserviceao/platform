@@ -231,4 +231,12 @@ public class ServiceTitanClient
         return await GetAsync(accessToken, url);
     }
 
+
+    // Try GET on /appointments/{id}/hold - undocumented but may return hold reason
+    public async Task<string> GetAppointmentHoldAsync(string accessToken, string stTenantId, long appointmentId)
+    {
+        var url = $"{BaseUrl}/jpm/v2/tenant/{stTenantId}/appointments/{appointmentId}/hold";
+        return await GetAsync(accessToken, url);
+    }
+
 }
