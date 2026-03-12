@@ -247,4 +247,19 @@ public class ServiceTitanClient
         return await GetAsync(accessToken, url);
     }
 
+
+    // GET export/job-notes
+    public async Task<string> GetJobNotesExportAsync(string accessToken, string stTenantId, string? from = null)
+    {
+        var url = $"{BaseUrl}/jpm/v2/tenant/{stTenantId}/export/job-notes" + (from != null ? $"?from={from}" : "");
+        return await GetAsync(accessToken, url);
+    }
+
+    // GET export/job-history  
+    public async Task<string> GetJobHistoryExportAsync(string accessToken, string stTenantId, string? from = null)
+    {
+        var url = $"{BaseUrl}/jpm/v2/tenant/{stTenantId}/export/job-history" + (from != null ? $"?from={from}" : "");
+        return await GetAsync(accessToken, url);
+    }
+
 }
