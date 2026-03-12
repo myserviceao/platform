@@ -184,5 +184,9 @@ public static class DbMigrations
             ALTER TABLE ""HoldReasons"" ADD COLUMN IF NOT EXISTS ""StTagTypeId"" bigint NULL;
         ");
 
+        await db.Database.ExecuteSqlRawAsync(@"
+            ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""Theme"" text NULL;
+        ");
+
     }
 }
