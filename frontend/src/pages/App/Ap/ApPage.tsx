@@ -1,260 +1,194 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 
-interface Vendor { id: number; name: string }
-interface Bill {
-  id: number; vendorId: number; vendorName: string
-  invoiceNumber: string; amount: number; dueDate: string
-  isPaid: boolean; paidDate: string | null
-}
+interface POItem { skuName: string; skuCode: string; description: string | null; quantity: number; quantityReceived: number; cost: number; total: number; status: string }
+interface PO { id: number; number: string; status: string; vendorName: string; jobNumber: string | null; total: number; tax: number; shipping: number; summary: string | null; date: string; requiredOn: string | null; sentOn: string | null; receivedOn: string | null; itemCount: number; items: POItem[] }
+interface Bill { id: number; invoiceNumber: string; amount: number; dueDate: string; isPaid: boolean; paidDate: string | null; stPurchaseOrderId: number | null; status: string | null; source: string | null; referenceNumber: string | null; summary: string | null; billDate: string | null; vendorName: string }
+interface ApSummary { totalUnpaid: number; billCount: number; overdueCount: number; overdueAmount: number; dueThisWeek: number; dueThisMonth: number; poCount: number; openPoCount: number; openPoTotal: number; byVendor: { vendor: string; total: number; count: number }[] }
 
-function fmt(n: number) {
-  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 })
-}
-function fmtDate(d: string) {
-  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-}
-function daysUntil(d: string) {
-  return Math.ceil((new Date(d).getTime() - Date.now()) / 86400000)
+const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(n)
+const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'
+const daysDiff = (d: string) => Math.floor((new Date(d).getTime() - Date.now()) / 86400000)
+
+const STATUS_COLORS: Record<string, string> = {
+  Pending: 'badge-warning', Open: 'badge-info', Sent: 'badge-info',
+  PartiallyReceived: 'badge-primary', FullyReceived: 'badge-success', Closed: 'badge-ghost', Canceled: 'badge-error',
+  Unreconciled: 'badge-warning', Reconciled: 'badge-success', Discrepancy: 'badge-error',
 }
 
 export function ApPage() {
+  const [tab, setTab] = useState<'summary' | 'pos' | 'bills'>('summary')
+  const [summary, setSummary] = useState<ApSummary | null>(null)
+  const [pos, setPos] = useState<PO[]>([])
   const [bills, setBills] = useState<Bill[]>([])
-  const [vendors, setVendors] = useState<Vendor[]>([])
   const [loading, setLoading] = useState(true)
-  const [showPaid, setShowPaid] = useState(false)
-  const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ vendorId: 0, invoiceNumber: '', amount: '', dueDate: '' })
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
+  const [expandedPo, setExpandedPo] = useState<number | null>(null)
 
-  const fetchData = useCallback(async () => {
-    const [bRes, vRes] = await Promise.all([
-      fetch('/api/ap/bills', { credentials: 'include' }),
-      fetch('/api/ap/vendors', { credentials: 'include' }),
-    ])
-    if (bRes.ok) setBills(await bRes.json())
-    if (vRes.ok) setVendors(await vRes.json())
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/ap/summary', { credentials: 'include' }).then(r => r.json()),
+      fetch('/api/ap/purchase-orders', { credentials: 'include' }).then(r => r.json()),
+      fetch('/api/ap/bills-enhanced', { credentials: 'include' }).then(r => r.json()),
+    ]).then(([s, p, b]) => {
+      if (!s.error) setSummary(s)
+      if (Array.isArray(p)) setPos(p)
+      if (Array.isArray(b)) setBills(b)
+    }).catch(() => {})
+    .finally(() => setLoading(false))
   }, [])
 
-  useEffect(() => { fetchData().finally(() => setLoading(false)) }, [fetchData])
+  if (loading) return <div className="flex items-center justify-center py-20"><span className="loading loading-spinner loading-lg text-primary" /></div>
 
-  const handleSubmit = async () => {
-    if (!form.vendorId || !form.amount || !form.dueDate) { setError('All fields required'); return }
-    setSaving(true); setError('')
-    const res = await fetch('/api/ap/bills', {
-      method: 'POST', credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        vendorId: form.vendorId,
-        invoiceNumber: form.invoiceNumber,
-        amount: parseFloat(form.amount),
-        dueDate: form.dueDate,
-      })
-    })
-    if (res.ok) {
-      const bill = await res.json()
-      setBills(prev => [...prev, bill])
-      setForm({ vendorId: 0, invoiceNumber: '', amount: '', dueDate: '' })
-      setShowForm(false)
-    } else {
-      const d = await res.json(); setError(d.error || 'Failed to add bill')
-    }
-    setSaving(false)
-  }
-
-  const togglePaid = async (bill: Bill) => {
-    const endpoint = bill.isPaid ? 'unpay' : 'pay'
-    const res = await fetch(`/api/ap/bills/${bill.id}/${endpoint}`, { method: 'PUT', credentials: 'include' })
-    if (res.ok) {
-      setBills(prev => prev.map(b => b.id === bill.id ? { ...b, isPaid: !b.isPaid, paidDate: !b.isPaid ? new Date().toISOString() : null } : b))
-    }
-  }
-
-  const deleteBill = async (id: number) => {
-    if (!confirm('Delete this bill?')) return
-    const res = await fetch(`/api/ap/bills/${id}`, { method: 'DELETE', credentials: 'include' })
-    if (res.ok) setBills(prev => prev.filter(b => b.id !== id))
-  }
-
-  const unpaid = bills.filter(b => !b.isPaid)
-  const displayed = showPaid ? bills : unpaid
-  const totalOwed = unpaid.reduce((s, b) => s + b.amount, 0)
-
-  // Group by vendor for summary
-  const byVendor = Object.values(
-    unpaid.reduce((acc, b) => {
-      if (!acc[b.vendorId]) acc[b.vendorId] = { vendorName: b.vendorName, total: 0, count: 0, nextDue: b.dueDate }
-      acc[b.vendorId].total += b.amount
-      acc[b.vendorId].count++
-      if (b.dueDate < acc[b.vendorId].nextDue) acc[b.vendorId].nextDue = b.dueDate
-      return acc
-    }, {} as Record<number, { vendorName: string; total: number; count: number; nextDue: string }>)
-  ).sort((a, b) => b.total - a.total)
-
-  if (loading) {
-    return <div className="flex items-center justify-center py-20"><span className="loading loading-spinner loading-md text-primary" /></div>
-  }
+  const unpaidBills = bills.filter(b => !b.isPaid)
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 py-2">
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-base-content">Accounts Payable</h1>
-          <p className="text-sm text-base-content/60 mt-1">{unpaid.length} unpaid bills · {fmt(totalOwed)} owed</p>
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold text-base-content">Accounts Payable & Purchasing</h1>
+        <div className="text-right">
+          <div className="text-xs text-base-content/40">Total Unpaid</div>
+          <div className="text-2xl font-bold text-error">{fmt(summary?.totalUnpaid ?? 0)}</div>
         </div>
-        <button onClick={() => setShowForm(true)} className="btn btn-primary btn-sm gap-1.5">
-          <span className="icon-[tabler--plus] size-4" /> Add Bill
-        </button>
       </div>
 
-      {/* Vendors Owed Summary */}
-      {byVendor.length > 0 && (
-        <div className="card bg-base-100 shadow-sm">
-          <div className="card-body p-0">
-            <div className="px-4 pt-4 pb-3 border-b border-base-200">
-              <h3 className="font-semibold text-sm text-base-content">Vendors Owed</h3>
-            </div>
-            <table className="table table-sm">
-              <thead>
-                <tr className="text-xs text-base-content/40 uppercase">
-                  <th>Vendor</th>
-                  <th className="text-center">Invoices</th>
-                  <th className="text-right">Amount Due</th>
-                  <th className="text-right">Next Due</th>
-                </tr>
-              </thead>
-              <tbody>
-                {byVendor.map((v, i) => {
-                  const days = daysUntil(v.nextDue)
-                  return (
-                    <tr key={i} className="hover:bg-base-200/40">
-                      <td className="font-medium text-base-content">{v.vendorName}</td>
-                      <td className="text-center"><span className="badge badge-ghost badge-sm">{v.count}</span></td>
-                      <td className="text-right font-semibold">{fmt(v.total)}</td>
-                      <td className="text-right">
-                        <span className={`text-sm ${days < 0 ? 'text-error font-medium' : days <= 7 ? 'text-warning' : 'text-base-content/60'}`}>
-                          {fmtDate(v.nextDue)}
-                        </span>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <div className="card bg-base-100 shadow-sm"><div className="card-body p-3">
+          <div className="text-[10px] text-base-content/40 uppercase">Unpaid Bills</div>
+          <div className="text-lg font-bold text-error">{fmt(summary?.totalUnpaid ?? 0)}</div>
+          <div className="text-xs text-base-content/50">{summary?.billCount ?? 0} bills</div>
+        </div></div>
+        <div className="card bg-base-100 shadow-sm"><div className="card-body p-3">
+          <div className="text-[10px] text-base-content/40 uppercase">Overdue</div>
+          <div className="text-lg font-bold text-error">{fmt(summary?.overdueAmount ?? 0)}</div>
+          <div className="text-xs text-base-content/50">{summary?.overdueCount ?? 0} past due</div>
+        </div></div>
+        <div className="card bg-base-100 shadow-sm"><div className="card-body p-3">
+          <div className="text-[10px] text-base-content/40 uppercase">Due This Week</div>
+          <div className="text-lg font-bold text-warning">{fmt(summary?.dueThisWeek ?? 0)}</div>
+        </div></div>
+        <div className="card bg-base-100 shadow-sm"><div className="card-body p-3">
+          <div className="text-[10px] text-base-content/40 uppercase">Open POs</div>
+          <div className="text-lg font-bold text-info">{summary?.openPoCount ?? 0}</div>
+          <div className="text-xs text-base-content/50">{fmt(summary?.openPoTotal ?? 0)}</div>
+        </div></div>
+        <div className="card bg-base-100 shadow-sm"><div className="card-body p-3">
+          <div className="text-[10px] text-base-content/40 uppercase">Due This Month</div>
+          <div className="text-lg font-bold text-warning">{fmt(summary?.dueThisMonth ?? 0)}</div>
+        </div></div>
+      </div>
 
-      {/* Add Bill Modal */}
-      {showForm && (
-        <div className="card bg-base-100 shadow-sm border border-primary/20">
-          <div className="card-body p-4 space-y-3">
-            <h3 className="font-semibold text-base-content">Add Bill</h3>
-            {error && <div className="alert alert-soft alert-error text-sm py-2">{error}</div>}
-            {vendors.length === 0 && (
-              <div className="alert alert-soft alert-warning text-sm py-2">
-                No vendors yet. <a href="/app/settings" className="text-primary underline">Add vendors in Settings</a> first.
-              </div>
-            )}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              <select
-                className="select select-sm"
-                value={form.vendorId}
-                onChange={e => setForm(f => ({ ...f, vendorId: parseInt(e.target.value) }))}
-              >
-                <option value={0}>Select Vendor</option>
-                {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-              </select>
-              <input
-                className="input input-sm"
-                placeholder="Invoice #"
-                value={form.invoiceNumber}
-                onChange={e => setForm(f => ({ ...f, invoiceNumber: e.target.value }))}
-              />
-              <input
-                className="input input-sm"
-                type="number"
-                step="0.01"
-                placeholder="Amount"
-                value={form.amount}
-                onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
-              />
-              <input
-                className="input input-sm"
-                type="date"
-                value={form.dueDate}
-                onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))}
-              />
-            </div>
-            <div className="flex gap-2 justify-end">
-              <button className="btn btn-ghost btn-sm" onClick={() => { setShowForm(false); setError('') }}>Cancel</button>
-              <button className="btn btn-primary btn-sm" onClick={handleSubmit} disabled={saving}>
-                {saving ? 'Adding...' : 'Add Bill'}
+      {/* Tabs */}
+      <div className="card bg-base-100 shadow-sm">
+        <div className="card-body p-0">
+          <div className="flex border-b border-base-200 px-4 pt-3 gap-1">
+            {([['summary', 'Summary'], ['pos', `Purchase Orders (${pos.length})`], ['bills', `Bills (${unpaidBills.length})`]] as const).map(([key, label]) => (
+              <button key={key} onClick={() => setTab(key as typeof tab)}
+                className={`px-3 py-1.5 text-sm font-medium rounded-t border-b-2 transition-colors ${tab === key ? 'border-b-primary text-primary bg-primary/5' : 'border-b-transparent text-base-content/50 hover:text-base-content'}`}>
+                {label}
               </button>
-            </div>
+            ))}
           </div>
-        </div>
-      )}
 
-      {/* Filter tabs */}
-      <div className="tabs tabs-bordered">
-        <button onClick={() => setShowPaid(false)} className={`tab ${!showPaid ? 'tab-active' : ''}`}>
-          Unpaid <span className="badge badge-soft badge-sm ms-2">{unpaid.length}</span>
-        </button>
-        <button onClick={() => setShowPaid(true)} className={`tab ${showPaid ? 'tab-active' : ''}`}>
-          All <span className="badge badge-soft badge-sm ms-2">{bills.length}</span>
-        </button>
+          {/* Summary Tab */}
+          {tab === 'summary' && summary && (
+            <div className="p-4">
+              <h3 className="font-semibold text-sm text-base-content mb-3">Payables by Vendor</h3>
+              {summary.byVendor.length > 0 ? (
+                <div className="space-y-2">
+                  {summary.byVendor.map((v, i) => (
+                    <div key={i} className="flex items-center gap-3">
+                      <span className="text-sm font-medium flex-1 truncate">{v.vendor}</span>
+                      <span className="text-xs text-base-content/40">{v.count} bills</span>
+                      <span className="text-sm font-bold text-error w-24 text-right">{fmt(v.total)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-base-content/40">No outstanding payables</p>
+              )}
+            </div>
+          )}
+
+          {/* POs Tab */}
+          {tab === 'pos' && (
+            <div className="divide-y divide-base-200">
+              {pos.length > 0 ? pos.map(po => (
+                <div key={po.id}>
+                  <div className="flex items-center gap-3 px-4 py-3 hover:bg-base-200/30 cursor-pointer"
+                    onClick={() => setExpandedPo(expandedPo === po.id ? null : po.id)}>
+                    <span className="icon-[tabler--chevron-right] size-4 text-base-content/30 transition-transform" style={{ transform: expandedPo === po.id ? 'rotate(90deg)' : '' }} />
+                    <span className="font-mono text-primary text-sm font-medium">PO-{po.number}</span>
+                    <span className={`badge badge-xs ${STATUS_COLORS[po.status] || 'badge-ghost'}`}>{po.status}</span>
+                    <span className="text-sm text-base-content/70 truncate flex-1">{po.vendorName}</span>
+                    {po.jobNumber && <span className="text-xs text-base-content/40">Job #{po.jobNumber}</span>}
+                    <span className="text-xs text-base-content/40">{po.itemCount} items</span>
+                    <span className="text-sm font-bold">{fmt(po.total)}</span>
+                    <span className="text-xs text-base-content/40">{fmtDate(po.date)}</span>
+                  </div>
+                  {expandedPo === po.id && po.items.length > 0 && (
+                    <div className="bg-base-200/20 px-4 pb-3">
+                      {po.summary && <p className="text-xs text-base-content/50 mb-2 pl-8">{po.summary}</p>}
+                      <table className="table table-xs ml-8">
+                        <thead>
+                          <tr className="text-[10px] text-base-content/40 uppercase">
+                            <th>Item</th><th>Code</th><th className="text-right">Qty</th><th className="text-right">Received</th><th className="text-right">Cost</th><th className="text-right">Total</th><th>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {po.items.map((item, i) => (
+                            <tr key={i}>
+                              <td className="text-sm">{item.skuName}</td>
+                              <td className="text-xs text-base-content/50 font-mono">{item.skuCode}</td>
+                              <td className="text-sm text-right">{item.quantity}</td>
+                              <td className={`text-sm text-right ${item.quantityReceived < item.quantity ? 'text-warning' : 'text-success'}`}>{item.quantityReceived}</td>
+                              <td className="text-sm text-right">{fmt(item.cost)}</td>
+                              <td className="text-sm text-right font-medium">{fmt(item.total)}</td>
+                              <td><span className={`badge badge-xs ${STATUS_COLORS[item.status] || 'badge-ghost'}`}>{item.status}</span></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )) : <p className="text-sm text-base-content/40 px-4 py-4">No purchase orders found. Sync to pull POs from ServiceTitan.</p>}
+            </div>
+          )}
+
+          {/* Bills Tab */}
+          {tab === 'bills' && (
+            <div className="overflow-x-auto">
+              {unpaidBills.length > 0 ? (
+                <table className="table table-sm">
+                  <thead>
+                    <tr className="text-xs text-base-content/40 uppercase">
+                      <th>Vendor</th><th>Reference</th><th>Source</th><th className="text-right">Amount</th><th>Due Date</th><th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {unpaidBills.map(b => {
+                      const dd = daysDiff(b.dueDate)
+                      return (
+                        <tr key={b.id} className="hover:bg-base-200/40">
+                          <td className="text-sm font-medium">{b.vendorName || '—'}</td>
+                          <td className="text-sm font-mono text-base-content/70">{b.referenceNumber || b.invoiceNumber || '—'}</td>
+                          <td><span className="badge badge-xs badge-ghost">{b.source || '—'}</span></td>
+                          <td className="text-sm text-right font-bold">{fmt(b.amount)}</td>
+                          <td className={`text-sm ${dd < 0 ? 'text-error font-semibold' : dd < 7 ? 'text-warning' : 'text-base-content/60'}`}>
+                            {fmtDate(b.dueDate)}
+                            {dd < 0 && <span className="text-[10px] ml-1">({Math.abs(dd)}d late)</span>}
+                          </td>
+                          <td><span className={`badge badge-xs ${STATUS_COLORS[b.status || ''] || 'badge-ghost'}`}>{b.status || '—'}</span></td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              ) : <p className="text-sm text-base-content/40 px-4 py-4">No unpaid bills</p>}
+            </div>
+          )}
+        </div>
       </div>
-
-      {/* Bills Table */}
-      {displayed.length === 0 ? (
-        <div className="text-center py-16 text-base-content/40 text-sm">
-          {showPaid ? 'No bills yet.' : 'No unpaid bills. You\'re all caught up!'}
-        </div>
-      ) : (
-        <div className="rounded-box border border-base-content/10 overflow-hidden">
-          <table className="table table-sm">
-            <thead>
-              <tr>
-                <th>Vendor</th>
-                <th>Invoice #</th>
-                <th className="text-right">Amount</th>
-                <th>Due Date</th>
-                <th>Status</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {displayed.map(b => {
-                const days = daysUntil(b.dueDate)
-                return (
-                  <tr key={b.id} className="row-hover">
-                    <td className="font-medium text-base-content">{b.vendorName}</td>
-                    <td className="text-base-content/60">{b.invoiceNumber || '—'}</td>
-                    <td className="text-right font-medium">{fmt(b.amount)}</td>
-                    <td>
-                      <span className={`text-sm ${!b.isPaid && days < 0 ? 'text-error font-medium' : !b.isPaid && days <= 7 ? 'text-warning' : 'text-base-content/60'}`}>
-                        {fmtDate(b.dueDate)}
-                        {!b.isPaid && days < 0 && <span className="text-xs ml-1">({Math.abs(days)}d overdue)</span>}
-                      </span>
-                    </td>
-                    <td>
-                      <button onClick={() => togglePaid(b)} className={`badge badge-soft badge-sm cursor-pointer ${b.isPaid ? 'badge-success' : 'badge-warning'}`}>
-                        {b.isPaid ? 'Paid' : 'Unpaid'}
-                      </button>
-                    </td>
-                    <td>
-                      <button onClick={() => deleteBill(b.id)} className="btn btn-ghost btn-xs text-base-content/30 hover:text-error">
-                        <span className="icon-[tabler--trash] size-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
     </div>
   )
 }
