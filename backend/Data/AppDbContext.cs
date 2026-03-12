@@ -147,6 +147,32 @@ public class AppDbContext : DbContext
              .HasForeignKey(l => l.TenantId);
         });
 
+        // PurchaseOrder
+        modelBuilder.Entity<PurchaseOrder>(e =>
+        {
+            e.HasKey(p => p.Id);
+            e.HasIndex(p => new { p.TenantId, p.StPurchaseOrderId }).IsUnique();
+            e.HasOne(p => p.Tenant)
+             .WithMany()
+             .HasForeignKey(p => p.TenantId);
+            e.HasMany(p => p.Items)
+             .WithOne(i => i.PurchaseOrder)
+             .HasForeignKey(i => i.PurchaseOrderId)
+             .OnDelete(DeleteBehavior.Cascade);
+            e.Property(p => p.Total).HasColumnType("numeric(18,2)");
+            e.Property(p => p.Tax).HasColumnType("numeric(18,2)");
+            e.Property(p => p.Shipping).HasColumnType("numeric(18,2)");
+        });
+
+        modelBuilder.Entity<PurchaseOrderItem>(e =>
+        {
+            e.HasKey(i => i.Id);
+            e.Property(i => i.Quantity).HasColumnType("numeric(18,2)");
+            e.Property(i => i.QuantityReceived).HasColumnType("numeric(18,2)");
+            e.Property(i => i.Cost).HasColumnType("numeric(18,2)");
+            e.Property(i => i.Total).HasColumnType("numeric(18,2)");
+        });
+
         // ApBill (AP invoices)
         modelBuilder.Entity<ApBill>(e =>
         {
@@ -156,7 +182,8 @@ public class AppDbContext : DbContext
              .HasForeignKey(b => b.TenantId);
             e.HasOne(b => b.Vendor)
              .WithMany()
-             .HasForeignKey(b => b.VendorId);
+             .HasForeignKey(b => b.VendorId)
+             .IsRequired(false);
             e.Property(b => b.Amount).HasColumnType("numeric(18,2)");
         });
     }
