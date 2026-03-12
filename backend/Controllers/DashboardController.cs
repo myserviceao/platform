@@ -294,7 +294,8 @@ public class DashboardController : ControllerBase
         if (tenantId == null) return Unauthorized();
         var raw = await _sync.GetRawApptExportAsync(tenantId.Value);
         return Content(raw, "application/json");
-    
+    }
+
     [HttpGet("tag-types")]
     public async Task<IActionResult> GetTagTypes()
     {
