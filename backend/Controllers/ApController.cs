@@ -265,14 +265,13 @@ public class ApController : ControllerBase
 
         var bills = await _db.ApBills
             .Where(b => b.TenantId == tenantId.Value)
-            .Include(b => b.Vendor)
             .OrderByDescending(b => b.DueDate)
             .Select(b => new
             {
                 b.Id, b.StApBillId, b.InvoiceNumber, b.Amount, b.DueDate,
                 b.IsPaid, b.PaidDate, b.StPurchaseOrderId,
                 b.Status, b.Source, b.ReferenceNumber, b.Summary, b.BillDate,
-                VendorName = b.Vendor != null ? b.Vendor.Name : ""
+                VendorName = b.VendorId > 0 && b.Vendor != null ? b.Vendor.Name : ""
             })
             .ToListAsync();
 
