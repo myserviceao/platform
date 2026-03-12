@@ -34,6 +34,7 @@ public class AuthController : ControllerBase
             user.LastName,
             user.Role,
             user.Title,
+            Theme = user.Theme ?? user.Tenant.Theme ?? "black",
             Tenant = new
             {
                 user.Tenant.Id,
@@ -106,6 +107,7 @@ public class AuthController : ControllerBase
             user.LastName,
             user.Role,
             user.Title,
+            Theme = user.Theme ?? user.Tenant.Theme ?? "black",
             Tenant = new
             {
                 user.Tenant.Id,
