@@ -296,6 +296,46 @@ public class ServiceTitanClient
         return await GetAsync(accessToken, url);
     }
 
+
+    // ── Inventory API ──────────────────────────────────────────
+
+    // GET vendors
+    public async Task<string> GetVendorsAsync(string accessToken, string stTenantId)
+    {
+        var url = $"{BaseUrl}/inventory/v2/tenant/{stTenantId}/vendors?pageSize=200&active=True";
+        return await GetAsync(accessToken, url);
+    }
+
+    // GET purchase orders (export)
+    public async Task<string> GetPurchaseOrdersExportAsync(string accessToken, string stTenantId, string? from = null)
+    {
+        var url = $"{BaseUrl}/inventory/v2/tenant/{stTenantId}/export/purchase-orders" + (from != null ? $"?from={from}" : "");
+        return await GetAsync(accessToken, url);
+    }
+
+    // GET purchase orders (list)
+    public async Task<string> GetPurchaseOrdersAsync(string accessToken, string stTenantId, int page = 1)
+    {
+        var url = $"{BaseUrl}/inventory/v2/tenant/{stTenantId}/purchase-orders?pageSize=200&page={page}";
+        return await GetAsync(accessToken, url);
+    }
+
+    // ── Accounting API ──────────────────────────────────────────
+
+    // GET AP bills
+    public async Task<string> GetApBillsAsync(string accessToken, string stTenantId, int page = 1)
+    {
+        var url = $"{BaseUrl}/accounting/v2/tenant/{stTenantId}/ap-bills?pageSize=200&page={page}";
+        return await GetAsync(accessToken, url);
+    }
+
+    // GET AP bills export
+    public async Task<string> GetApBillsExportAsync(string accessToken, string stTenantId, string? from = null)
+    {
+        var url = $"{BaseUrl}/accounting/v2/tenant/{stTenantId}/export/ap-bills" + (from != null ? $"?from={from}" : "");
+        return await GetAsync(accessToken, url);
+    }
+
     // POST helper
     private async Task<string> PostAsync(string accessToken, string url, string body)
     {
