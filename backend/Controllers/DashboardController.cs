@@ -181,6 +181,11 @@ public class DashboardController : ControllerBase
         var tenantId = HttpContext.Session.GetInt32("tenantId");
         if (tenantId == null) return Unauthorized();
 
+        // Demo tenant: skip ST sync, just return dashboard
+        var tenant = await _db.Tenants.FindAsync(tenantId.Value);
+        if (tenant?.Slug == "demo-hvac")
+            return await GetDashboard();
+
         var result = await _sync.SyncAllAsync(tenantId.Value);
 
         if (!result.Success)
