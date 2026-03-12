@@ -97,7 +97,7 @@ public static class DemoSeeder
             {
                 TenantId = tenantId,
                 StCustomerId = 90000000 + i,
-                LocationName = customerData[i].Name,
+                Name = customerData[i].Name,
                 UpdatedAt = now
             };
             db.Customers.Add(c);
