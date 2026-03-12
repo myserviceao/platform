@@ -614,7 +614,7 @@ public class ServiceTitanSyncService
                         {
                             existing = new ApBill
                             {
-                                TenantId = tenantId, StApBillId = stBillId, VendorId = vendor?.Id ?? 0,
+                                TenantId = tenantId, StApBillId = stBillId, VendorId = vendor?.Id,
                                 InvoiceNumber = refNum ?? "", Amount = billAmount, DueDate = dueDate,
                                 IsPaid = canceled || status == "Reconciled", StPurchaseOrderId = poId,
                                 Status = status, Source = source, ReferenceNumber = refNum,
