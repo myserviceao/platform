@@ -19,16 +19,16 @@ public class SettingsController : ControllerBase
     [HttpPut("theme")]
     public async Task<IActionResult> UpdateTheme([FromBody] ThemeRequest req)
     {
-        var tenantId = HttpContext.Session.GetInt32("tenantId");
-        if (tenantId == null) return Unauthorized();
+        var userId = HttpContext.Session.GetInt32("userId");
+        if (userId == null) return Unauthorized();
 
-        var tenant = await _db.Tenants.FindAsync(tenantId.Value);
-        if (tenant == null) return NotFound();
+        var user = await _db.Users.FindAsync(userId.Value);
+        if (user == null) return NotFound();
 
-        tenant.Theme = req.Theme;
+        user.Theme = req.Theme;
         await _db.SaveChangesAsync();
 
-        return Ok(new { theme = tenant.Theme });
+        return Ok(new { theme = user.Theme });
     }
 
     public class ThemeRequest
