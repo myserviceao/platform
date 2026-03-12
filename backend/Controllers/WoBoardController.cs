@@ -1,3 +1,4 @@
+using MyServiceAO.Services.ServiceTitan;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MyServiceAO.Data;
@@ -180,7 +181,8 @@ public class WoBoardController : ControllerBase
     /// Manually assign a hold reason to a job.
     /// </summary>
     [HttpPut("holds/{jobId}/reason")]
-    public async Task<IActionResult> SetHoldReason(int jobId, [FromBody] SetHoldReasonRequest req)
+    public async Task<IActionResult> SetHoldReason(int jobId, [FromBody] SetHoldReasonRequest req,
+        [FromServices] ServiceTitanClient stClient, [FromServices] ServiceTitanOAuthService oauth)
     {
         var tenantId = HttpContext.Session.GetInt32("tenantId");
         if (tenantId == null) return Unauthorized();
@@ -190,6 +192,55 @@ public class WoBoardController : ControllerBase
 
         job.HoldReasonName = string.IsNullOrWhiteSpace(req.Reason) ? null : req.Reason;
         await _db.SaveChangesAsync();
+
+        // Push tag to ST (fire-and-forget)
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var token = await oauth.GetValidTokenAsync(tenantId.Value);
+                if (token == null) return;
+                var tenant = await _db.Tenants.FindAsync(tenantId.Value);
+                if (tenant?.StTenantId == null) return;
+
+                // Get all hold reason tag mappings
+                var holdReasons = await _db.HoldReasons
+                    .Where(h => h.TenantId == tenantId.Value && h.StTagTypeId != null)
+                    .ToListAsync();
+                var allBoardTagIds = holdReasons.Select(h => h.StTagTypeId!.Value).ToHashSet();
+                if (allBoardTagIds.Count == 0) return;
+
+                // Find the target tag for the assigned reason
+                long? newTagId = null;
+                if (!string.IsNullOrWhiteSpace(req.Reason))
+                {
+                    var matched = holdReasons.FirstOrDefault(h =>
+                        h.Name.Equals(req.Reason, StringComparison.OrdinalIgnoreCase));
+                    newTagId = matched?.StTagTypeId;
+                }
+
+                // Get current job tags from ST
+                var jobRaw = await stClient.GetJobAsync(token, tenant.StTenantId, job.StJobId);
+                var jobDoc = System.Text.Json.JsonDocument.Parse(jobRaw);
+                var mergedIds = new List<long>();
+                if (jobDoc.RootElement.TryGetProperty("tagTypeIds", out var existingTags) &&
+                    existingTags.ValueKind == System.Text.Json.JsonValueKind.Array)
+                {
+                    foreach (var t in existingTags.EnumerateArray())
+                    {
+                        var id = t.GetInt64();
+                        if (!allBoardTagIds.Contains(id)) mergedIds.Add(id); // keep non-board tags
+                    }
+                }
+                if (newTagId.HasValue) mergedIds.Add(newTagId.Value);
+
+                await stClient.UpdateJobTagsAsync(token, tenant.StTenantId, job.StJobId, mergedIds);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ST Tag Sync] Failed for job {job.JobNumber}: {ex.Message}");
+            }
+        });
 
         return Ok(new { job.Id, job.JobNumber, holdReasonName = job.HoldReasonName });
     }
