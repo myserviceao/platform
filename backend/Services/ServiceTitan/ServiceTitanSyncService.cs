@@ -19,6 +19,12 @@ public class ServiceTitanSyncService
         _db = db; _client = client; _oauth = oauth; _logger = logger;
     }
 
+    private static DateTime ToUtc(DateTime dt) => dt.Kind == DateTimeKind.Unspecified 
+        ? DateTime.SpecifyKind(dt, DateTimeKind.Utc) 
+        : dt.ToUniversalTime();
+
+    private static DateTime? ToUtcNullable(DateTime? dt) => dt.HasValue ? ToUtc(dt.Value) : null;
+
     public async Task<SyncResult> SyncAllAsync(int tenantId)
     {
         try
@@ -505,10 +511,10 @@ public class ServiceTitanSyncService
                         var tax = po.TryGetProperty("tax", out var ptx) && ptx.ValueKind == JsonValueKind.Number ? ptx.GetDecimal() : 0;
                         var shipping = po.TryGetProperty("shipping", out var psh) && psh.ValueKind == JsonValueKind.Number ? psh.GetDecimal() : 0;
                         var summary = po.TryGetProperty("summary", out var psm) ? psm.GetString() : null;
-                        var date = po.TryGetProperty("date", out var pd) && pd.ValueKind == JsonValueKind.String ? DateTime.Parse(pd.GetString()!) : DateTime.UtcNow;
-                        var requiredOn = po.TryGetProperty("requiredOn", out var pr) && pr.ValueKind == JsonValueKind.String ? (DateTime?)DateTime.Parse(pr.GetString()!) : null;
-                        var sentOn = po.TryGetProperty("sentOn", out var pso) && pso.ValueKind == JsonValueKind.String ? (DateTime?)DateTime.Parse(pso.GetString()!) : null;
-                        var receivedOn = po.TryGetProperty("receivedOn", out var pro) && pro.ValueKind == JsonValueKind.String ? (DateTime?)DateTime.Parse(pro.GetString()!) : null;
+                        var date = po.TryGetProperty("date", out var pd) && pd.ValueKind == JsonValueKind.String ? ToUtc(DateTime.Parse(pd.GetString()!)) : DateTime.UtcNow;
+                        var requiredOn = po.TryGetProperty("requiredOn", out var pr) && pr.ValueKind == JsonValueKind.String ? ToUtcNullable(DateTime.Parse(pr.GetString()!)) : null;
+                        var sentOn = po.TryGetProperty("sentOn", out var pso) && pso.ValueKind == JsonValueKind.String ? ToUtcNullable(DateTime.Parse(pso.GetString()!)) : null;
+                        var receivedOn = po.TryGetProperty("receivedOn", out var pro) && pro.ValueKind == JsonValueKind.String ? ToUtcNullable(DateTime.Parse(pro.GetString()!)) : null;
 
                         // Look up vendor name
                         var vendor = await _db.Vendors.FirstOrDefaultAsync(v => v.TenantId == tenantId && v.StVendorId == vendorId);
@@ -589,8 +595,8 @@ public class ServiceTitanSyncService
                         var source = b.TryGetProperty("source", out var bsrc) ? bsrc.GetString() : null;
                         var refNum = b.TryGetProperty("referenceNumber", out var brn) ? brn.GetString() : null;
                         var summary = b.TryGetProperty("summary", out var bsm) ? bsm.GetString() : null;
-                        var dueDate = b.TryGetProperty("dueDate", out var bdd) && bdd.ValueKind == JsonValueKind.String ? DateTime.Parse(bdd.GetString()!) : DateTime.UtcNow.AddDays(30);
-                        var billDate = b.TryGetProperty("billDate", out var bbd) && bbd.ValueKind == JsonValueKind.String ? (DateTime?)DateTime.Parse(bbd.GetString()!) : null;
+                        var dueDate = b.TryGetProperty("dueDate", out var bdd) && bdd.ValueKind == JsonValueKind.String ? ToUtc(DateTime.Parse(bdd.GetString()!)) : DateTime.UtcNow.AddDays(30);
+                        var billDate = b.TryGetProperty("billDate", out var bbd) && bbd.ValueKind == JsonValueKind.String ? ToUtcNullable(DateTime.Parse(bbd.GetString()!)) : null;
                         var poId = b.TryGetProperty("purchaseOrderId", out var bpo) && bpo.ValueKind == JsonValueKind.Number ? (long?)bpo.GetInt64() : null;
                         var doNotPay = b.TryGetProperty("doNotPay", out var bdnp) && bdnp.ValueKind == JsonValueKind.True;
                         var canceled = b.TryGetProperty("dateCanceled", out var bdc) && bdc.ValueKind == JsonValueKind.String;
