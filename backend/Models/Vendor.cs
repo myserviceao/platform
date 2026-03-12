@@ -10,6 +10,7 @@ public class Vendor
     public string? ContactName { get; set; }
     public string? Phone { get; set; }
     public string? Email { get; set; }
+    public long StVendorId { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
