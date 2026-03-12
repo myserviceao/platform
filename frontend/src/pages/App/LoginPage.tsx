@@ -56,7 +56,16 @@ export function LoginPage() {
             </form>
           </div>
         </div>
-        <p className="text-center text-sm text-base-content/60 mt-4">Don't have an account?{' '}<Link to="/app/register" className="link link-primary">Get started</Link></p>
+        <div className="text-center mt-6 space-y-3">
+          <div className="border-t border-base-content/10 pt-4">
+            <p className="text-sm text-base-content/60">Want to get started?</p>
+            <a href="mailto:brandon@patriotmechanical.com" className="link link-primary text-sm font-medium">Contact us for a demo</a>
+          </div>
+          <div className="border-t border-base-content/10 pt-3">
+            <p className="text-xs text-base-content/40">Try the live demo</p>
+            <p className="text-xs text-base-content/50 font-mono">demo@myserviceao.com / demo123</p>
+          </div>
+        </div>
       </div>
     </div>
   )
