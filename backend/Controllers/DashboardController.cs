@@ -294,7 +294,32 @@ public class DashboardController : ControllerBase
         if (tenantId == null) return Unauthorized();
         var raw = await _sync.GetRawApptExportAsync(tenantId.Value);
         return Content(raw, "application/json");
+    
+    [HttpGet("tag-types")]
+    public async Task<IActionResult> GetTagTypes()
+    {
+        var tenantId = HttpContext.Session.GetInt32("tenantId");
+        if (tenantId == null) return Unauthorized();
+        var raw = await _syncService.GetTagTypesRawAsync(tenantId.Value);
+        return Content(raw, "application/json");
     }
+
+    [HttpGet("hold-job-tags")]
+    public async Task<IActionResult> GetHoldJobTags()
+    {
+        var tenantId = HttpContext.Session.GetInt32("tenantId");
+        if (tenantId == null) return Unauthorized();
+        
+        // Get hold jobs with their tagTypeIds from our DB
+        var holdJobs = await _db.Jobs
+            .Where(j => j.TenantId == tenantId.Value && j.Status == "Hold")
+            .Select(j => new { j.JobNumber, j.CustomerName, j.HoldReasonName, j.TagTypeIds })
+            .ToListAsync();
+        
+        return Ok(holdJobs);
+    }
+
+}
 
 
 
