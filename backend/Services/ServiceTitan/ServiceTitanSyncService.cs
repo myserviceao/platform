@@ -451,6 +451,194 @@ public class ServiceTitanSyncService
                 _logger.LogInformation("[Sync] Cleared hold reason for {Count} jobs no longer on hold", noLongerHold.Count);
             }
 
+
+            // 4e. Sync Vendors from ST Inventory API
+            try
+            {
+                var vendorsRaw = await _client.GetVendorsAsync(token, stTenantId);
+                var vendorsDoc = JsonDocument.Parse(vendorsRaw);
+                if (vendorsDoc.RootElement.TryGetProperty("data", out var vendorArr))
+                {
+                    int vendorSynced = 0;
+                    foreach (var v in vendorArr.EnumerateArray())
+                    {
+                        var stVendorId = v.TryGetProperty("id", out var vid) ? vid.GetInt64() : 0;
+                        if (stVendorId == 0) continue;
+                        var name = v.TryGetProperty("name", out var vn) ? vn.GetString() ?? "" : "";
+
+                        var existing = await _db.Vendors.FirstOrDefaultAsync(x => x.TenantId == tenantId && x.StVendorId == stVendorId);
+                        if (existing == null)
+                        {
+                            existing = new Vendor { TenantId = tenantId, StVendorId = stVendorId, Name = name };
+                            _db.Vendors.Add(existing);
+                        }
+                        else
+                        {
+                            existing.Name = name;
+                        }
+                        vendorSynced++;
+                    }
+                    await _db.SaveChangesAsync();
+                    _logger.LogInformation("[Sync] Synced {Count} vendors", vendorSynced);
+                }
+            }
+            catch (Exception ex) { _logger.LogWarning(ex, "[Sync] Vendor sync failed"); }
+
+            // 4f. Sync Purchase Orders from ST Inventory API
+            try
+            {
+                var poRaw = await _client.GetPurchaseOrdersAsync(token, stTenantId);
+                var poDoc = JsonDocument.Parse(poRaw);
+                if (poDoc.RootElement.TryGetProperty("data", out var poArr))
+                {
+                    int poSynced = 0;
+                    foreach (var po in poArr.EnumerateArray())
+                    {
+                        var stPoId = po.TryGetProperty("id", out var pid) ? pid.GetInt64() : 0;
+                        if (stPoId == 0) continue;
+
+                        var poNumber = po.TryGetProperty("number", out var pn) ? pn.GetString() ?? "" : "";
+                        var status = po.TryGetProperty("status", out var ps) ? ps.GetString() ?? "" : "";
+                        var vendorId = po.TryGetProperty("vendorId", out var pv) ? pv.GetInt64() : 0;
+                        var jobId = po.TryGetProperty("jobId", out var pj) && pj.ValueKind == JsonValueKind.Number ? (long?)pj.GetInt64() : null;
+                        var total = po.TryGetProperty("total", out var pt) && pt.ValueKind == JsonValueKind.Number ? pt.GetDecimal() : 0;
+                        var tax = po.TryGetProperty("tax", out var ptx) && ptx.ValueKind == JsonValueKind.Number ? ptx.GetDecimal() : 0;
+                        var shipping = po.TryGetProperty("shipping", out var psh) && psh.ValueKind == JsonValueKind.Number ? psh.GetDecimal() : 0;
+                        var summary = po.TryGetProperty("summary", out var psm) ? psm.GetString() : null;
+                        var date = po.TryGetProperty("date", out var pd) && pd.ValueKind == JsonValueKind.String ? DateTime.Parse(pd.GetString()!) : DateTime.UtcNow;
+                        var requiredOn = po.TryGetProperty("requiredOn", out var pr) && pr.ValueKind == JsonValueKind.String ? (DateTime?)DateTime.Parse(pr.GetString()!) : null;
+                        var sentOn = po.TryGetProperty("sentOn", out var pso) && pso.ValueKind == JsonValueKind.String ? (DateTime?)DateTime.Parse(pso.GetString()!) : null;
+                        var receivedOn = po.TryGetProperty("receivedOn", out var pro) && pro.ValueKind == JsonValueKind.String ? (DateTime?)DateTime.Parse(pro.GetString()!) : null;
+
+                        // Look up vendor name
+                        var vendor = await _db.Vendors.FirstOrDefaultAsync(v => v.TenantId == tenantId && v.StVendorId == vendorId);
+                        var vendorName = vendor?.Name ?? "";
+
+                        // Look up job number
+                        var job = jobId.HasValue ? await _db.Jobs.FirstOrDefaultAsync(j => j.TenantId == tenantId && j.StJobId == jobId.Value) : null;
+
+                        var existing = await _db.PurchaseOrders
+                            .Include(p => p.Items)
+                            .FirstOrDefaultAsync(p => p.TenantId == tenantId && p.StPurchaseOrderId == stPoId);
+
+                        if (existing == null)
+                        {
+                            existing = new PurchaseOrder
+                            {
+                                TenantId = tenantId, StPurchaseOrderId = stPoId, Number = poNumber,
+                                Status = status, VendorName = vendorName, StVendorId = vendorId,
+                                StJobId = jobId, JobNumber = job?.JobNumber,
+                                Total = total, Tax = tax, Shipping = shipping, Summary = summary,
+                                Date = date, RequiredOn = requiredOn, SentOn = sentOn, ReceivedOn = receivedOn
+                            };
+                            _db.PurchaseOrders.Add(existing);
+                        }
+                        else
+                        {
+                            existing.Number = poNumber; existing.Status = status;
+                            existing.VendorName = vendorName; existing.StVendorId = vendorId;
+                            existing.StJobId = jobId; existing.JobNumber = job?.JobNumber;
+                            existing.Total = total; existing.Tax = tax; existing.Shipping = shipping;
+                            existing.Summary = summary; existing.Date = date;
+                            existing.RequiredOn = requiredOn; existing.SentOn = sentOn; existing.ReceivedOn = receivedOn;
+                            _db.PurchaseOrderItems.RemoveRange(existing.Items);
+                        }
+
+                        // Parse PO items
+                        if (po.TryGetProperty("items", out var itemsArr))
+                        {
+                            foreach (var item in itemsArr.EnumerateArray())
+                            {
+                                existing.Items.Add(new PurchaseOrderItem
+                                {
+                                    StItemId = item.TryGetProperty("id", out var iid) ? iid.GetInt64() : 0,
+                                    SkuName = item.TryGetProperty("skuName", out var isn) ? isn.GetString() ?? "" : "",
+                                    SkuCode = item.TryGetProperty("skuCode", out var isc) ? isc.GetString() ?? "" : "",
+                                    Description = item.TryGetProperty("description", out var isd) ? isd.GetString() : null,
+                                    Quantity = item.TryGetProperty("quantity", out var iq) && iq.ValueKind == JsonValueKind.Number ? iq.GetDecimal() : 0,
+                                    QuantityReceived = item.TryGetProperty("quantityReceived", out var iqr) && iqr.ValueKind == JsonValueKind.Number ? iqr.GetDecimal() : 0,
+                                    Cost = item.TryGetProperty("cost", out var ic) && ic.ValueKind == JsonValueKind.Number ? ic.GetDecimal() : 0,
+                                    Total = item.TryGetProperty("total", out var it) && it.ValueKind == JsonValueKind.Number ? it.GetDecimal() : 0,
+                                    Status = item.TryGetProperty("status", out var ist) ? ist.GetString() ?? "" : ""
+                                });
+                            }
+                        }
+                        poSynced++;
+                    }
+                    await _db.SaveChangesAsync();
+                    _logger.LogInformation("[Sync] Synced {Count} purchase orders", poSynced);
+                }
+            }
+            catch (Exception ex) { _logger.LogWarning(ex, "[Sync] PO sync failed"); }
+
+            // 4g. Sync AP Bills from ST Accounting API
+            try
+            {
+                var billsRaw = await _client.GetApBillsAsync(token, stTenantId);
+                var billsDoc = JsonDocument.Parse(billsRaw);
+                if (billsDoc.RootElement.TryGetProperty("data", out var billArr))
+                {
+                    int billSynced = 0;
+                    foreach (var b in billArr.EnumerateArray())
+                    {
+                        var stBillId = b.TryGetProperty("id", out var bid) ? bid.GetInt64() : 0;
+                        if (stBillId == 0) continue;
+
+                        var billAmount = b.TryGetProperty("billAmount", out var ba) ? decimal.TryParse(ba.GetString(), out var bam) ? bam : 0 : 0;
+                        var status = b.TryGetProperty("status", out var bs) ? bs.GetString() : null;
+                        var source = b.TryGetProperty("source", out var bsrc) ? bsrc.GetString() : null;
+                        var refNum = b.TryGetProperty("referenceNumber", out var brn) ? brn.GetString() : null;
+                        var summary = b.TryGetProperty("summary", out var bsm) ? bsm.GetString() : null;
+                        var dueDate = b.TryGetProperty("dueDate", out var bdd) && bdd.ValueKind == JsonValueKind.String ? DateTime.Parse(bdd.GetString()!) : DateTime.UtcNow.AddDays(30);
+                        var billDate = b.TryGetProperty("billDate", out var bbd) && bbd.ValueKind == JsonValueKind.String ? (DateTime?)DateTime.Parse(bbd.GetString()!) : null;
+                        var poId = b.TryGetProperty("purchaseOrderId", out var bpo) && bpo.ValueKind == JsonValueKind.Number ? (long?)bpo.GetInt64() : null;
+                        var doNotPay = b.TryGetProperty("doNotPay", out var bdnp) && bdnp.ValueKind == JsonValueKind.True;
+                        var canceled = b.TryGetProperty("dateCanceled", out var bdc) && bdc.ValueKind == JsonValueKind.String;
+
+                        // Get vendor name
+                        var vendorName = "";
+                        if (b.TryGetProperty("vendor", out var bv) && bv.ValueKind == JsonValueKind.Object)
+                            vendorName = bv.TryGetProperty("name", out var bvn) ? bvn.GetString() ?? "" : "";
+
+                        // Find or create vendor
+                        var vendor = await _db.Vendors.FirstOrDefaultAsync(v => v.TenantId == tenantId && v.Name == vendorName);
+                        if (vendor == null && !string.IsNullOrEmpty(vendorName))
+                        {
+                            vendor = new Vendor { TenantId = tenantId, Name = vendorName };
+                            _db.Vendors.Add(vendor);
+                            await _db.SaveChangesAsync();
+                        }
+
+                        var existing = await _db.ApBills.FirstOrDefaultAsync(x => x.TenantId == tenantId && x.StApBillId == stBillId);
+                        if (existing == null)
+                        {
+                            existing = new ApBill
+                            {
+                                TenantId = tenantId, StApBillId = stBillId, VendorId = vendor?.Id ?? 0,
+                                InvoiceNumber = refNum ?? "", Amount = billAmount, DueDate = dueDate,
+                                IsPaid = canceled || status == "Reconciled", StPurchaseOrderId = poId,
+                                Status = status, Source = source, ReferenceNumber = refNum,
+                                Summary = summary, BillDate = billDate
+                            };
+                            _db.ApBills.Add(existing);
+                        }
+                        else
+                        {
+                            existing.VendorId = vendor?.Id ?? existing.VendorId;
+                            existing.Amount = billAmount; existing.DueDate = dueDate;
+                            existing.IsPaid = canceled || status == "Reconciled";
+                            existing.StPurchaseOrderId = poId; existing.Status = status;
+                            existing.Source = source; existing.ReferenceNumber = refNum;
+                            existing.Summary = summary; existing.BillDate = billDate;
+                        }
+                        billSynced++;
+                    }
+                    await _db.SaveChangesAsync();
+                    _logger.LogInformation("[Sync] Synced {Count} AP bills", billSynced);
+                }
+            }
+            catch (Exception ex) { _logger.LogWarning(ex, "[Sync] AP Bills sync failed"); }
+
             // 5. Upsert PmCustomers
             foreach (var (stCustomerId, lastPmDate) in pmDates)
             {
