@@ -174,10 +174,10 @@ public static class DbMigrations
         // Add HoldReasonName to Jobs
         await db.Database.ExecuteSqlRawAsync(@"
             ALTER TABLE ""Jobs"" ADD COLUMN IF NOT EXISTS ""HoldReasonName"" TEXT;
+        ");
 
-            await db.Database.ExecuteSqlRawAsync(@"
-                ALTER TABLE ""HoldReasons"" ADD COLUMN IF NOT EXISTS ""StTagTypeId"" bigint NULL;
-            ");
+        await db.Database.ExecuteSqlRawAsync(@"
+            ALTER TABLE ""Jobs"" ADD COLUMN IF NOT EXISTS ""TagTypeIds"" text NULL;
         ");
 
     }
