@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { useTheme, type Theme } from '@/hooks/useTheme'
@@ -274,6 +274,27 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     setOpenMenus(prev => ({ ...prev, [idx]: !prev[idx] }))
   }
 
+  const [syncing, setSyncing] = useState(false)
+  const [syncMsg, setSyncMsg] = useState<string | null>(null)
+
+  const handleSync = async () => {
+    setSyncing(true)
+    setSyncMsg(null)
+    try {
+      const r = await fetch('/api/dashboard/sync', { method: 'POST', credentials: 'include' })
+      if (r.ok) {
+        setSyncMsg('Synced!')
+        setTimeout(() => setSyncMsg(null), 2000)
+        window.location.reload()
+      } else {
+        const d = await r.json().catch(() => ({}))
+        setSyncMsg(d.error || 'Sync failed')
+        setTimeout(() => setSyncMsg(null), 4000)
+      }
+    } catch { setSyncMsg('Sync failed') }
+    finally { setSyncing(false) }
+  }
+
   const handleLogout = async () => {
     await logout()
     navigate('/')
@@ -419,9 +440,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </ul>
         </nav>
 
-        <div className="border-t border-base-content/10 p-3">
-          <button onClick={handleLogout} className="btn btn-ghost btn-sm w-full justify-start gap-2 text-base-content/70">
-            <span className="icon-[tabler--logout] size-4.5" />
+        <div className="border-t border-base-content/10 p-3 space-y-1">
+          <button onClick={handleSync} disabled={syncing} className="btn btn-primary btn-sm w-full gap-2">
+            {syncing ? <span className="loading loading-spinner loading-xs" /> : <span className="icon-[tabler--refresh] size-4" />}
+            {syncing ? 'Syncing...' : 'Sync Data'}
+          </button>
+          {syncMsg && (
+            <div className={`text-xs text-center py-1 ${syncMsg === 'Synced!' ? 'text-success' : 'text-error'}`}>{syncMsg}</div>
+          )}
+          <button onClick={handleLogout} className="btn btn-ghost btn-sm w-full justify-start gap-2 text-base-content/50 hover:text-error">
+            <span className="icon-[tabler--logout] size-4" />
             Sign out
           </button>
         </div>
