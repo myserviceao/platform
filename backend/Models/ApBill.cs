@@ -6,8 +6,8 @@ public class ApBill
     public int TenantId { get; set; }
     public Tenant Tenant { get; set; } = null!;
 
-    public int VendorId { get; set; }
-    public Vendor Vendor { get; set; } = null!;
+    public int? VendorId { get; set; }
+    public Vendor? Vendor { get; set; }
 
     public string InvoiceNumber { get; set; } = "";
     public decimal Amount { get; set; }
