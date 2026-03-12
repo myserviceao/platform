@@ -247,9 +247,9 @@ public class ServiceTitanSyncService
                         // Auto-assign hold reason from tags
                         if (status == "Hold" && tagToHoldReason.Count > 0)
                         {
-                            if (job.TryGetProperty("tagTypeIds", out var tagsProp) && tagsProp.ValueKind == JsonValueKind.Array)
+                            if (job.TryGetProperty("tagTypeIds", out var tagsProp2) && tagsProp2.ValueKind == JsonValueKind.Array)
                             {
-                                foreach (var tagEl in tagsProp.EnumerateArray())
+                                foreach (var tagEl in tagsProp2.EnumerateArray())
                                 {
                                     var tagId = tagEl.GetInt64();
                                     if (tagToHoldReason.TryGetValue(tagId, out var holdName))
