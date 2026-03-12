@@ -320,4 +320,14 @@ public class DashboardController : ControllerBase
         return Ok(holdJobs);
     }
 
+
+    [HttpGet("hold-appointments")]
+    public async Task<IActionResult> GetHoldAppointments()
+    {
+        var tenantId = HttpContext.Session.GetInt32("tenantId");
+        if (tenantId == null) return Unauthorized();
+        var raw = await _sync.GetHoldAppointmentsRawAsync(tenantId.Value);
+        return Content(raw, "application/json");
+    }
+
 }
