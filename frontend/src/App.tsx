@@ -31,7 +31,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 function AppRoutes() {
   const auth = useAuthProvider()
-  const themeProvider = useThemeProvider((auth.user?.tenant?.theme as Theme) ?? 'dark')
+  const themeProvider = useThemeProvider((auth.user?.theme as Theme) ?? 'black')
 
   return (
     <AuthContext.Provider value={auth}>
