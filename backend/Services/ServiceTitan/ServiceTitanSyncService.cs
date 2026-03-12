@@ -23,7 +23,8 @@ public class ServiceTitanSyncService
     {
         try
         {
-            var token = await _oauth.GetValidTokenAsync(tenantId);
+            // Force fresh token to avoid 401 errors from stale cache
+            var token = await _oauth.ForceRefreshAsync(tenantId);
             if (token == null)
                 return new SyncResult { Success = false, Error = "Not connected to ServiceTitan" };
 
