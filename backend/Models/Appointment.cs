@@ -10,6 +10,7 @@ public class Appointment
     public long StJobId { get; set; }
     public string JobNumber { get; set; } = "";
     public string CustomerName { get; set; } = "";
+    public string? LocationName { get; set; } // Location/address for the appointment
     public string Status { get; set; } = "";
 
     // Appointment start time in UTC
