@@ -280,23 +280,10 @@ export function DashboardPage() {
         />
       </div>
 
-      {/* ── Weather ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+      {/* ── Weather + Schedule ── */}
+      <div className="grid grid-cols-1 xl:grid-cols-[300px_1fr] gap-3">
         <WeatherCard />
-        <div className="lg:col-span-2 rounded-box border border-base-content/10 bg-base-100 p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="icon-[tabler--alert-triangle] size-5 text-warning" />
-            <h3 className="font-semibold text-sm">Weather Impact</h3>
-          </div>
-          <div className="text-xs text-base-content/50">
-            Weather conditions that may affect HVAC service calls today and this week.
-            Extreme heat or cold drives higher call volume.
-          </div>
-        </div>
-      </div>
-
-      {/* Schedule Strip */}
-      <div className="card bg-base-100 shadow-sm">
+        <div className="card bg-base-100 shadow-sm">
         <div className="card-body p-0">
           <div className="flex border-b border-base-200 px-4 pt-3 gap-1">
             {(['today', 'tomorrow', 'dayafter'] as const).map((tab) => {
@@ -329,34 +316,44 @@ export function DashboardPage() {
           {activeSchedule && activeSchedule.items.length > 0 ? (
             <div className="divide-y divide-base-200">
               {(() => {
-                // Group appointments by technician
                 const techMap = new Map<string, typeof activeSchedule.items>()
                 activeSchedule.items.forEach(item => {
                   const techName = item.techs?.length > 0 ? item.techs.join(', ') : 'Unassigned'
                   if (!techMap.has(techName)) techMap.set(techName, [])
                   techMap.get(techName)!.push(item)
                 })
-                return Array.from(techMap.entries()).map(([tech, items]) => (
-                  <details key={tech} className="group" open={techMap.size <= 3}>
-                    <summary className="flex items-center justify-between px-4 py-2.5 cursor-pointer hover:bg-base-200/40 list-none">
-                      <div className="flex items-center gap-2">
-                        <span className="icon-[tabler--chevron-right] size-4 text-base-content/30 transition-transform group-open:rotate-90" />
-                        <span className="icon-[tabler--user] size-4 text-base-content/40" />
-                        <span className={'text-sm font-medium ' + (tech === 'Unassigned' ? 'text-base-content/30 italic' : 'text-base-content')}>{tech}</span>
+                return Array.from(techMap.entries()).map(([tech, items]) => {
+                  if (items.length === 1) {
+                    const item = items[0]
+                    return (
+                      <div key={tech} className="flex items-center gap-3 px-4 py-2.5 hover:bg-base-200/30">
+                        <span className={'text-sm font-medium w-36 truncate shrink-0 ' + (tech === 'Unassigned' ? 'text-base-content/30 italic' : '')}>{tech}</span>
+                        <span className="font-mono text-primary text-xs shrink-0">#{item.jobNumber}</span>
+                        <span className="text-sm truncate flex-1 text-base-content/70">{item.locationName || item.customerName}</span>
+                        <span className="text-xs text-base-content/40 shrink-0">{fmtTime(item.start)}</span>
                       </div>
-                      <span className="badge badge-sm badge-ghost">{items.length}</span>
-                    </summary>
-                    <div className="pb-1">
-                      {items.map((item, i) => (
-                        <div key={i} className="flex items-center gap-3 px-4 pl-12 py-2 hover:bg-base-200/30 text-sm">
-                          <span className="font-mono text-primary text-xs shrink-0">#{item.jobNumber}</span>
-                          <span className="font-medium truncate flex-1">{item.locationName || item.customerName}</span>
-                          <span className="text-base-content/50 text-xs shrink-0">{fmtTime(item.start)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </details>
-                ))
+                    )
+                  }
+                  return (
+                    <details key={tech} className="group">
+                      <summary className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-base-200/40 list-none">
+                        <span className="text-sm font-medium w-36 truncate shrink-0">{tech}</span>
+                        <span className="icon-[tabler--chevron-down] size-3.5 text-base-content/30 transition-transform group-open:rotate-180" />
+                        <span className="badge badge-xs badge-primary">{items.length}</span>
+                        <span className="flex-1" />
+                      </summary>
+                      <div className="pb-1 bg-base-200/20">
+                        {items.map((item, i) => (
+                          <div key={i} className="flex items-center gap-3 px-4 pl-[11.5rem] py-1.5 text-sm">
+                            <span className="font-mono text-primary text-xs shrink-0">#{item.jobNumber}</span>
+                            <span className="truncate flex-1 text-base-content/70">{item.locationName || item.customerName}</span>
+                            <span className="text-xs text-base-content/40 shrink-0">{fmtTime(item.start)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )
+                })
               })()}
             </div>
           ) : (
@@ -365,7 +362,9 @@ export function DashboardPage() {
         </div>
       </div>
 
-      {/* Bottom 3-column layout */}
+      </div>
+
+      {/* Bottom layout */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
 
         {/* Col 1: Open Work Orders */}
