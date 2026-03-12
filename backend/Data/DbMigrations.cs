@@ -192,5 +192,10 @@ public static class DbMigrations
             ALTER TABLE ""Appointments"" ADD COLUMN IF NOT EXISTS ""LocationName"" text NULL;
         ");
 
+        await db.Database.ExecuteSqlRawAsync(@"
+            ALTER TABLE ""Tenants"" ADD COLUMN IF NOT EXISTS ""LogoData"" text NULL;
+            ALTER TABLE ""Tenants"" ADD COLUMN IF NOT EXISTS ""LogoContentType"" text NULL;
+        ");
+
     }
 }
