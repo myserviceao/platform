@@ -71,16 +71,12 @@ export function MessageEditorModal({ item, onClose, onSaved, onSent }: Props) {
       body: JSON.stringify({ subject: channel === 'email' ? subject : null, body, channel }),
     })
     // Open native email/sms client
-    const a = document.createElement('a')
-    if (channel === 'email' && item.customerEmail) {
-      a.href = `mailto:${item.customerEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
-    } else if (channel === 'sms' && item.customerPhone) {
-      a.href = `sms:${item.customerPhone}?body=${encodeURIComponent(body)}`
-    }
-    if (a.href) {
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
+    if (channel === 'email') {
+      if (!item.customerEmail) { alert('This customer has no email address on file.'); setSending(false); return }
+      window.location.href = `mailto:${item.customerEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+    } else if (channel === 'sms') {
+      if (!item.customerPhone) { alert('This customer has no phone number on file.'); setSending(false); return }
+      window.location.href = `sms:${item.customerPhone}?body=${encodeURIComponent(body)}`
     }
     // Mark as sent
     await fetch(`/api/outreach/${item.id}/mark-sent`, { method: 'POST', credentials: 'include' })

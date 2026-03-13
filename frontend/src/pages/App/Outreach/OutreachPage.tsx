@@ -83,26 +83,31 @@ export function OutreachPage() {
   const pendingCount = (type: string) =>
     stats?.byTypeAndStatus.filter(s => s.type === type && s.status === 'pending').reduce((a, b) => a + b.count, 0) ?? 0
 
-  const openNativeClient = (item: OutreachItem) => {
-    const a = document.createElement('a')
-    if (item.channel === 'email' && item.customerEmail) {
+  const openNativeClient = (item: OutreachItem): boolean => {
+    if (item.channel === 'email') {
+      if (!item.customerEmail) {
+        alert('This customer has no email address on file.')
+        return false
+      }
       const subject = encodeURIComponent(item.subject ?? '')
       const body = encodeURIComponent(item.body)
-      a.href = `mailto:${item.customerEmail}?subject=${subject}&body=${body}`
-    } else if (item.channel === 'sms' && item.customerPhone) {
+      window.location.href = `mailto:${item.customerEmail}?subject=${subject}&body=${body}`
+      return true
+    } else if (item.channel === 'sms') {
+      if (!item.customerPhone) {
+        alert('This customer has no phone number on file.')
+        return false
+      }
       const body = encodeURIComponent(item.body)
-      a.href = `sms:${item.customerPhone}?body=${body}`
-    } else {
-      return
+      window.location.href = `sms:${item.customerPhone}?body=${body}`
+      return true
     }
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
+    return false
   }
 
   const handleSend = async (item: OutreachItem) => {
+    if (!openNativeClient(item)) return
     setSending(item.id)
-    openNativeClient(item)
     await fetch(`/api/outreach/${item.id}/mark-sent`, { method: 'POST', credentials: 'include' })
     setSending(null)
     fetchItems()
