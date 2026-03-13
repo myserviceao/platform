@@ -71,13 +71,16 @@ export function MessageEditorModal({ item, onClose, onSaved, onSent }: Props) {
       body: JSON.stringify({ subject: channel === 'email' ? subject : null, body, channel }),
     })
     // Open native email/sms client
+    const a = document.createElement('a')
     if (channel === 'email' && item.customerEmail) {
-      const s = encodeURIComponent(subject)
-      const b = encodeURIComponent(body)
-      window.open(`mailto:${item.customerEmail}?subject=${s}&body=${b}`, '_blank')
+      a.href = `mailto:${item.customerEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
     } else if (channel === 'sms' && item.customerPhone) {
-      const b = encodeURIComponent(body)
-      window.open(`sms:${item.customerPhone}?body=${b}`, '_blank')
+      a.href = `sms:${item.customerPhone}?body=${encodeURIComponent(body)}`
+    }
+    if (a.href) {
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
     }
     // Mark as sent
     await fetch(`/api/outreach/${item.id}/mark-sent`, { method: 'POST', credentials: 'include' })

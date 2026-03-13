@@ -84,14 +84,20 @@ export function OutreachPage() {
     stats?.byTypeAndStatus.filter(s => s.type === type && s.status === 'pending').reduce((a, b) => a + b.count, 0) ?? 0
 
   const openNativeClient = (item: OutreachItem) => {
+    const a = document.createElement('a')
     if (item.channel === 'email' && item.customerEmail) {
       const subject = encodeURIComponent(item.subject ?? '')
       const body = encodeURIComponent(item.body)
-      window.open(`mailto:${item.customerEmail}?subject=${subject}&body=${body}`, '_blank')
+      a.href = `mailto:${item.customerEmail}?subject=${subject}&body=${body}`
     } else if (item.channel === 'sms' && item.customerPhone) {
       const body = encodeURIComponent(item.body)
-      window.open(`sms:${item.customerPhone}?body=${body}`, '_blank')
+      a.href = `sms:${item.customerPhone}?body=${body}`
+    } else {
+      return
     }
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
   }
 
   const handleSend = async (item: OutreachItem) => {
