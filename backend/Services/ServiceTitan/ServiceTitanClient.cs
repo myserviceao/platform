@@ -438,6 +438,14 @@ public class ServiceTitanClient
         return await GetAsync(accessToken, url);
     }
 
+
+    // GET raw customer export (first page only, for debugging)
+    public async Task<string> GetCustomersExportRawAsync(string accessToken, string stTenantId)
+    {
+        var url = $"{BaseUrl}/crm/v2/tenant/{stTenantId}/export/customers";
+        return await GetAsync(accessToken, url);
+    }
+
     // POST helper
     private async Task<string> PostAsync(string accessToken, string url, string body)
     {
