@@ -118,6 +118,20 @@ public class OutreachController : ControllerBase
         return Ok(new { success });
     }
 
+    // POST /api/outreach/{id}/mark-sent — marks item as sent (user sent manually via email/sms client)
+    [HttpPost("{id:int}/mark-sent")]
+    public async Task<IActionResult> MarkSent(int id)
+    {
+        if (TenantId == null) return Unauthorized();
+        var item = await _db.OutreachItems.FirstOrDefaultAsync(i => i.Id == id && i.TenantId == TenantId.Value);
+        if (item == null) return NotFound();
+        item.Status = "sent";
+        item.SentAt = DateTime.UtcNow;
+        item.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+        return Ok(new { success = true });
+    }
+
     // POST /api/outreach/{id}/retry
     [HttpPost("{id:int}/retry")]
     public async Task<IActionResult> Retry(int id)

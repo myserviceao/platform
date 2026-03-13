@@ -7,6 +7,8 @@ interface OutreachItem {
   subject: string | null
   body: string
   customerName: string | null
+  customerEmail: string | null
+  customerPhone: string | null
 }
 
 interface Template {
@@ -61,14 +63,24 @@ export function MessageEditorModal({ item, onClose, onSaved, onSent }: Props) {
 
   const handleSend = async () => {
     setSending(true)
-    // Save first then send
+    // Save edits first
     await fetch(`/api/outreach/${item.id}`, {
       method: 'PUT',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ subject: channel === 'email' ? subject : null, body, channel }),
     })
-    await fetch(`/api/outreach/${item.id}/send`, { method: 'POST', credentials: 'include' })
+    // Open native email/sms client
+    if (channel === 'email' && item.customerEmail) {
+      const s = encodeURIComponent(subject)
+      const b = encodeURIComponent(body)
+      window.open(`mailto:${item.customerEmail}?subject=${s}&body=${b}`, '_blank')
+    } else if (channel === 'sms' && item.customerPhone) {
+      const b = encodeURIComponent(body)
+      window.open(`sms:${item.customerPhone}?body=${b}`, '_blank')
+    }
+    // Mark as sent
+    await fetch(`/api/outreach/${item.id}/mark-sent`, { method: 'POST', credentials: 'include' })
     setSending(false)
     onSent()
   }

@@ -83,9 +83,21 @@ export function OutreachPage() {
   const pendingCount = (type: string) =>
     stats?.byTypeAndStatus.filter(s => s.type === type && s.status === 'pending').reduce((a, b) => a + b.count, 0) ?? 0
 
-  const handleSend = async (id: number) => {
-    setSending(id)
-    await fetch(`/api/outreach/${id}/send`, { method: 'POST', credentials: 'include' })
+  const openNativeClient = (item: OutreachItem) => {
+    if (item.channel === 'email' && item.customerEmail) {
+      const subject = encodeURIComponent(item.subject ?? '')
+      const body = encodeURIComponent(item.body)
+      window.open(`mailto:${item.customerEmail}?subject=${subject}&body=${body}`, '_blank')
+    } else if (item.channel === 'sms' && item.customerPhone) {
+      const body = encodeURIComponent(item.body)
+      window.open(`sms:${item.customerPhone}?body=${body}`, '_blank')
+    }
+  }
+
+  const handleSend = async (item: OutreachItem) => {
+    setSending(item.id)
+    openNativeClient(item)
+    await fetch(`/api/outreach/${item.id}/mark-sent`, { method: 'POST', credentials: 'include' })
     setSending(null)
     fetchItems()
     fetchStats()
@@ -97,9 +109,10 @@ export function OutreachPage() {
     fetchStats()
   }
 
-  const handleRetry = async (id: number) => {
-    setSending(id)
-    await fetch(`/api/outreach/${id}/retry`, { method: 'POST', credentials: 'include' })
+  const handleRetry = async (item: OutreachItem) => {
+    setSending(item.id)
+    openNativeClient(item)
+    await fetch(`/api/outreach/${item.id}/mark-sent`, { method: 'POST', credentials: 'include' })
     setSending(null)
     fetchItems()
     fetchStats()
@@ -107,11 +120,15 @@ export function OutreachPage() {
 
   const handleBulkSend = async () => {
     if (selected.size === 0) return
-    await fetch('/api/outreach/bulk-send', {
-      method: 'POST', credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ids: [...selected] }),
-    })
+    // Open native client for each selected item
+    const selectedItems = allItems.filter(i => selected.has(i.id))
+    for (const item of selectedItems) {
+      openNativeClient(item)
+    }
+    // Mark all as sent
+    for (const id of selected) {
+      await fetch(`/api/outreach/${id}/mark-sent`, { method: 'POST', credentials: 'include' })
+    }
     setSelected(new Set())
     fetchItems()
     fetchStats()
@@ -325,12 +342,12 @@ export function OutreachPage() {
                               <span className="icon-[tabler--edit] size-3.5" />
                             </button>
                             {item.status === 'failed' ? (
-                              <button onClick={() => handleRetry(item.id)} disabled={sending === item.id} className="btn btn-warning btn-xs gap-0.5" title="Retry">
+                              <button onClick={() => handleRetry(item)} disabled={sending === item.id} className="btn btn-warning btn-xs gap-0.5" title="Retry">
                                 {sending === item.id ? <span className="loading loading-spinner loading-xs" /> : <span className="icon-[tabler--refresh] size-3" />}
                                 Retry
                               </button>
                             ) : (
-                              <button onClick={() => handleSend(item.id)} disabled={sending === item.id} className="btn btn-primary btn-xs gap-0.5" title="Send">
+                              <button onClick={() => handleSend(item)} disabled={sending === item.id} className="btn btn-primary btn-xs gap-0.5" title="Send">
                                 {sending === item.id ? <span className="loading loading-spinner loading-xs" /> : <span className="icon-[tabler--send] size-3" />}
                                 Send
                               </button>
