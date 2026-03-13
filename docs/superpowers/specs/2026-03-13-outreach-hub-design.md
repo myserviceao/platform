@@ -13,6 +13,28 @@ A human-in-the-loop customer outreach system that auto-generates suggested commu
 
 ---
 
+## Prerequisites
+
+### Job.CompletedOn Field
+
+The existing `Job` model has no `CompletedOn` column. The ST sync service already parses `completedOn` from the API response (for PM date calculation) but does not persist it. This feature requires:
+
+1. Add `CompletedOn` (DateTime?) to the `Job` model.
+2. Add `ALTER TABLE "Jobs" ADD COLUMN IF NOT EXISTS "CompletedOn" TIMESTAMP WITH TIME ZONE;` to DbMigrations.
+3. Update the sync service to persist `completedOn` when upserting jobs.
+
+Without this, the post-service follow-up generation logic cannot function.
+
+### Existing PM Outreach Page
+
+The app currently has a `PmOutreachController` and PM Outreach page. Once the Outreach Hub is live, the old PM Outreach page is **deprecated** — the Outreach Hub's PM Reminders tab replaces it. During implementation:
+
+1. Remove "PM Outreach" from the sidebar nav.
+2. Keep the old controller temporarily for backward compat, but add no new features to it.
+3. Remove the old controller and page in a follow-up cleanup.
+
+---
+
 ## Data Model
 
 ### OutreachTemplate
@@ -23,12 +45,14 @@ A human-in-the-loop customer outreach system that auto-generates suggested commu
 | TenantId    | int      | FK to Tenants                                                |
 | Name        | string   | e.g., "PM Reminder - Email"                                  |
 | Type        | string   | `pm_reminder`, `post_service`, `win_back`, `seasonal`        |
-| Channel     | string   | `email`, `sms`, `both`                                       |
-| Subject     | string?  | Email subject line (null for SMS-only)                        |
+| Channel     | string   | `email` or `sms` (one template per channel)                  |
+| Subject     | string?  | Email subject line (null for SMS templates)                   |
 | Body        | string   | Message body with merge tags like `{{customerName}}`         |
 | IsDefault   | bool     | System-provided templates, cannot be deleted                 |
 | CreatedAt   | DateTime |                                                              |
 | UpdatedAt   | DateTime |                                                              |
+
+Note: No `both` channel on templates. Each template targets one channel. A type can have separate email and SMS templates. When generating items, the system creates one item per channel if both templates exist for the type.
 
 ### OutreachItem
 
@@ -37,26 +61,38 @@ A human-in-the-loop customer outreach system that auto-generates suggested commu
 | Id            | int       | PK                                                         |
 | TenantId      | int       | FK to Tenants                                               |
 | CustomerId    | int       | FK to Customers                                             |
-| StCustomerId  | long      | ServiceTitan customer ID                                    |
+| JobId         | int?      | FK to Jobs (set for post_service items, null otherwise)     |
 | Type          | string    | `pm_reminder`, `post_service`, `win_back`, `seasonal`       |
 | Channel       | string    | `email` or `sms`                                            |
-| Status        | string    | `pending`, `sent`, `dismissed`                              |
+| Status        | string    | `pending`, `sent`, `dismissed`, `failed`                    |
+| FailureReason | string?   | Error message if status is `failed`                         |
 | Subject       | string?   | Rendered email subject                                      |
 | Body          | string    | Rendered message body with customer data filled in          |
 | ScheduledFor  | DateTime? | Optional, for seasonal campaigns                           |
 | SentAt        | DateTime? |                                                             |
 | DismissedAt   | DateTime? |                                                             |
 | CreatedAt     | DateTime  |                                                             |
+| UpdatedAt     | DateTime  |                                                             |
 
 ### OutreachSettings
 
-| Field                     | Type | Notes                              |
-|---------------------------|------|------------------------------------|
-| Id                        | int  | PK                                 |
-| TenantId                  | int  | FK to Tenants, unique              |
-| WinBackThresholdMonths    | int  | Default 12                         |
-| PostServiceDelayHours     | int  | Default 48                         |
-| PmReminderDaysBeforeDue   | int  | Default 30                         |
+| Field                     | Type    | Notes                                          |
+|---------------------------|---------|-------------------------------------------------|
+| Id                        | int     | PK                                              |
+| TenantId                  | int     | FK to Tenants, unique                           |
+| WinBackThresholdMonths    | int     | Default 12                                      |
+| PostServiceDelayHours     | int     | Default 48                                      |
+| ResendApiKey              | string? | Encrypted at rest. Masked in GET responses.     |
+| ResendFromEmail           | string? | e.g., `service@theircompany.com`                |
+| TwilioAccountSid          | string? | Encrypted at rest. Masked in GET responses.     |
+| TwilioAuthToken           | string? | Encrypted at rest. Masked in GET responses.     |
+| TwilioFromPhone           | string? | e.g., `+15551234567`                            |
+
+Note: `PmReminderDaysBeforeDue` has been removed. PM reminder generation uses the existing `PmCustomer.PmStatus` field (Overdue/ComingDue) which is already computed by the sync service.
+
+### Default Template Seeding
+
+Default templates (8 total: 1 email + 1 SMS per type) are seeded lazily. When `GenerateOutreachItemsAsync` runs and finds no templates for a tenant, it creates the defaults. This avoids a global migration and handles new tenants automatically.
 
 ---
 
@@ -64,32 +100,36 @@ A human-in-the-loop customer outreach system that auto-generates suggested commu
 
 Runs after each ServiceTitan sync via `OutreachService.GenerateOutreachItemsAsync(tenantId)`.
 
-**Deduplication rule (all types)**: Before creating any item, check if a pending or sent item of the same `type` + `customerId` exists within the last 30 days. If so, skip.
+**Deduplication rules:**
+- **PM Reminder, Win-Back, Seasonal**: Skip if a pending or sent item of the same `type` + `customerId` exists within the last 30 days.
+- **Post-Service**: Skip if a pending or sent item of the same `type` + `customerId` + `jobId` exists. This allows multiple follow-ups to the same customer for different jobs.
+
+**Channel handling**: For each qualifying customer/job, if both an email and SMS template exist for the type, generate two items (one per channel). The user can dismiss whichever they don't want.
 
 ### PM Reminders
 
 - Query `PmCustomers` where status is `Overdue` or `ComingDue`.
-- Generate one `OutreachItem` per qualifying customer.
+- Generate one `OutreachItem` per qualifying customer per channel.
 - Available merge tags: `{{customerName}}`, `{{lastPmDate}}`, `{{daysOverdue}}`.
 
 ### Post-Service Follow-ups
 
-- Query `Jobs` completed within the last `PostServiceDelayHours`.
-- Generate one item per completed job.
+- Query `Jobs` where `CompletedOn` is within the last `PostServiceDelayHours` and `Status` is `Completed`.
+- Generate one item per completed job per channel.
 - Available merge tags: `{{customerName}}`, `{{jobType}}`, `{{technicianName}}`, `{{completionDate}}`.
 
 ### Win-Back
 
-- Query `Customers` whose most recent completed job is older than `WinBackThresholdMonths`.
+- Query `Customers` whose most recent completed job (`CompletedOn`) is older than `WinBackThresholdMonths`.
 - Rank by lifetime spend (sum of invoice totals) descending, then by total job count.
-- Generate one item per qualifying customer.
+- Generate one item per qualifying customer per channel.
 - Available merge tags: `{{customerName}}`, `{{lastServiceDate}}`, `{{monthsSinceService}}`, `{{lifetimeSpend}}`.
 
 ### Seasonal Campaigns
 
 - **User-triggered**, not auto-generated.
-- User picks a template, selects a customer segment (all customers, PM history customers, etc.) and optional date range.
-- System bulk-generates draft `OutreachItem` records with status `pending` for review.
+- User picks a template, selects a customer segment, and the system bulk-generates draft items for review.
+- Segment options: All customers, Customers with PM history, Customers without PM history, Customers with no service in last N months (user-configurable).
 
 ---
 
@@ -113,7 +153,7 @@ Route: `/app/outreach`
 
 ### Queue View (tabs 1-4)
 
-Table of pending outreach items.
+Paginated table of pending outreach items (default 50 per page).
 
 | Column          | Notes                                                    |
 |-----------------|----------------------------------------------------------|
@@ -126,6 +166,7 @@ Table of pending outreach items.
 
 - **Win-Back tab** additionally shows lifetime spend and months since last service.
 - Win-back items sorted by lifetime spend descending (highest-value customers first).
+- **Failed items** show with a warning badge and a "Retry" action.
 - **Bulk actions**: Select multiple rows, "Send Selected", "Dismiss Selected".
 
 ### Message Editor (modal)
@@ -139,7 +180,7 @@ Table of pending outreach items.
 
 ### Sent History Tab
 
-- Table: customer, type, channel, message preview, sent date.
+- Paginated table: customer, type, channel, message preview, sent date, status (sent/failed).
 - Filterable by type and date range.
 
 ---
@@ -152,11 +193,12 @@ Accessible from a "Manage Templates" link within the Outreach Hub.
 
 - 1 email + 1 SMS template per outreach type = 8 total defaults.
 - Marked `IsDefault = true`. Cannot be deleted, but can be duplicated and edited.
+- Seeded lazily on first outreach generation per tenant.
 
 ### Template Editor
 
 - List view grouped by type.
-- Create/edit form: name, type, channel, subject (email), body.
+- Create/edit form: name, type, channel (email or sms), subject (email), body.
 - **Merge tag helper**: Clickable list of available tags for the selected type. Clicking inserts tag at cursor position.
 - **Live preview panel**: Shows template rendered with sample data.
 
@@ -184,21 +226,27 @@ Accessible from a "Manage Templates" link within the Outreach Hub.
 
 - REST API integration.
 - Configurable "from" address per tenant (e.g., `service@theircompany.com`).
-- API key stored in tenant configuration.
+- API key stored in `OutreachSettings`, encrypted at rest.
 
 ### SMS — Twilio
 
-- Account SID, Auth Token, and "from" phone number stored in tenant configuration.
+- Account SID, Auth Token, and "from" phone number stored in `OutreachSettings`, encrypted at rest.
 - SMS templates should target under 160 characters.
+
+### Error Handling
+
+- If a send fails (API error, invalid credentials, rate limit), set the item status to `failed` with the error in `FailureReason`.
+- Failed items remain visible in the queue with a warning badge and "Retry" action.
+- Retry resets status to `pending` and attempts to send again.
 
 ### Configuration
 
-A settings section within the Outreach Hub (or under app Settings) where the tenant enters:
+A settings section within the Outreach Hub where the tenant enters:
 - Resend API key + from email address
 - Twilio Account SID, Auth Token, from phone number
-- Outreach thresholds (win-back months, post-service delay, PM reminder days)
+- Win-back threshold months and post-service delay hours
 
-Sending is disabled until credentials are configured. The UI shows a setup prompt if missing.
+GET responses mask sensitive fields (show `****` + last 4 characters for API keys/tokens). Sending is disabled until credentials are configured — the UI shows a setup prompt if missing.
 
 ---
 
@@ -206,29 +254,32 @@ Sending is disabled until credentials are configured. The UI shows a setup promp
 
 ### OutreachService
 
-- `GenerateOutreachItemsAsync(tenantId)` — runs generation logic for all types, respects deduplication.
-- `SendOutreachItemAsync(itemId, channel)` — renders final message, sends via Resend or Twilio, updates status to `sent`.
+- `GenerateOutreachItemsAsync(tenantId)` — runs generation logic for all types, seeds default templates if needed, respects deduplication.
+- `SendOutreachItemAsync(itemId)` — renders final message, sends via Resend or Twilio based on item channel, updates status to `sent` or `failed`.
 - `DismissOutreachItemAsync(itemId)` — marks as `dismissed`.
-- `BulkSendAsync(itemIds)` — sends multiple items.
+- `BulkSendAsync(itemIds)` — sends multiple items, returns per-item success/failure.
+- `BulkDismissAsync(itemIds)` — dismisses multiple items.
 - `RenderTemplate(template, customerData)` — replaces merge tags with actual values.
 
 ### OutreachController — `/api/outreach`
 
-| Method | Route                        | Description                        |
-|--------|------------------------------|------------------------------------|
-| GET    | `/api/outreach`              | List items (filter by type, status) |
-| GET    | `/api/outreach/stats`        | Pending/sent counts by type        |
-| PUT    | `/api/outreach/{id}`         | Edit draft (subject, body, channel) |
-| POST   | `/api/outreach/{id}/send`    | Send single item                   |
-| POST   | `/api/outreach/bulk-send`    | Send selected items                |
-| POST   | `/api/outreach/{id}/dismiss` | Dismiss item                       |
-| GET    | `/api/outreach/templates`    | List templates                     |
-| POST   | `/api/outreach/templates`    | Create template                    |
-| PUT    | `/api/outreach/templates/{id}` | Edit template                    |
-| DELETE | `/api/outreach/templates/{id}` | Delete (non-default only)        |
-| POST   | `/api/outreach/campaigns`    | Generate seasonal campaign items   |
-| GET    | `/api/outreach/settings`     | Get thresholds and credentials     |
-| PUT    | `/api/outreach/settings`     | Update thresholds and credentials  |
+| Method | Route                          | Description                          |
+|--------|--------------------------------|--------------------------------------|
+| GET    | `/api/outreach`                | List items (filter by type, status, page, pageSize) |
+| GET    | `/api/outreach/stats`          | Pending/sent/failed counts by type   |
+| PUT    | `/api/outreach/{id}`           | Edit draft (subject, body, channel)  |
+| POST   | `/api/outreach/{id}/send`      | Send single item                     |
+| POST   | `/api/outreach/{id}/retry`     | Retry a failed item                  |
+| POST   | `/api/outreach/bulk-send`      | Send selected items                  |
+| POST   | `/api/outreach/{id}/dismiss`   | Dismiss item                         |
+| POST   | `/api/outreach/bulk-dismiss`   | Dismiss selected items               |
+| GET    | `/api/outreach/templates`      | List templates                       |
+| POST   | `/api/outreach/templates`      | Create template                      |
+| PUT    | `/api/outreach/templates/{id}` | Edit template                        |
+| DELETE | `/api/outreach/templates/{id}` | Delete (non-default only)            |
+| POST   | `/api/outreach/campaigns`      | Generate seasonal campaign items     |
+| GET    | `/api/outreach/settings`       | Get settings (credentials masked)    |
+| PUT    | `/api/outreach/settings`       | Update settings and credentials      |
 
 ---
 
@@ -237,8 +288,9 @@ Sending is disabled until credentials are configured. The UI shows a setup promp
 ### Sidebar
 
 - Add "Outreach" to Main nav, between "Customers" and "Accounts Payable".
-- Icon: `icon-[tabler--send]`
+- Icon: `icon-[tabler--mail-forward]` (distinct from PM Outreach's `icon-[tabler--send]`)
 - Badge showing total pending count across all types.
+- Remove "PM Outreach" from sidebar (deprecated by Outreach Hub).
 
 ### Routes
 
@@ -254,16 +306,17 @@ Sending is disabled until credentials are configured. The UI shows a setup promp
 
 ## Scope Summary
 
-| Component          | Count | Details                                        |
-|--------------------|-------|------------------------------------------------|
-| New models         | 3     | OutreachTemplate, OutreachItem, OutreachSettings |
-| New service        | 1     | OutreachService                                |
-| New controller     | 1     | OutreachController (14 endpoints)              |
-| New page           | 1     | Outreach Hub (5 tabs, editor, template mgmt)   |
-| New integrations   | 2     | Resend (email), Twilio (SMS)                   |
-| Sync modification  | 1     | Hook into existing sync to generate items      |
-| Nav change         | 1     | Add Outreach to sidebar                        |
-| Existing page changes | 0  | Self-contained (Approach A)                    |
+| Component             | Count | Details                                           |
+|-----------------------|-------|---------------------------------------------------|
+| Prerequisites         | 1     | Add Job.CompletedOn field + sync update            |
+| New models            | 3     | OutreachTemplate, OutreachItem, OutreachSettings   |
+| New service           | 1     | OutreachService                                    |
+| New controller        | 1     | OutreachController (16 endpoints)                  |
+| New page              | 1     | Outreach Hub (5 tabs, editor, template mgmt)       |
+| New integrations      | 2     | Resend (email), Twilio (SMS)                       |
+| Sync modification     | 2     | Persist Job.CompletedOn + hook outreach generation |
+| Nav changes           | 2     | Add Outreach, remove PM Outreach                   |
+| Deprecated            | 1     | PmOutreachController (remove in follow-up)         |
 
 ---
 
@@ -274,3 +327,4 @@ Sending is disabled until credentials are configured. The UI shows a setup promp
 - Analytics/conversion tracking (did the customer book after outreach?)
 - A/B testing of templates
 - Review request integration (Google/Yelp)
+- PmOutreachController full removal (follow-up cleanup)
