@@ -336,6 +336,24 @@ public class ServiceTitanClient
         return await GetAsync(accessToken, url);
     }
 
+
+    // ── Telecom API ──────────────────────────────────────────
+
+    // GET calls export
+    public async Task<string> GetCallsExportAsync(string accessToken, string stTenantId, string? from = null)
+    {
+        var url = $"{BaseUrl}/telecom/v2/tenant/{stTenantId}/export/calls" + (from != null ? $"?from={from}" : "");
+        return await GetAsync(accessToken, url);
+    }
+
+    // GET calls (v3 list with filters)
+    public async Task<string> GetCallsAsync(string accessToken, string stTenantId, string? createdOnOrAfter = null, int page = 1, int pageSize = 200)
+    {
+        var url = $"{BaseUrl}/telecom/v3/tenant/{stTenantId}/calls?pageSize={pageSize}&page={page}";
+        if (createdOnOrAfter != null) url += $"&createdOnOrAfter={createdOnOrAfter}";
+        return await GetAsync(accessToken, url);
+    }
+
     // POST helper
     private async Task<string> PostAsync(string accessToken, string url, string body)
     {
