@@ -5,6 +5,8 @@ interface PO { id: number; number: string; status: string; vendorName: string; j
 interface Bill { id: number; invoiceNumber: string; amount: number; dueDate: string; isPaid: boolean; paidDate: string | null; stPurchaseOrderId: number | null; status: string | null; source: string | null; referenceNumber: string | null; summary: string | null; billDate: string | null; vendorName: string }
 interface ApSummary { totalUnpaid: number; billCount: number; overdueCount: number; overdueAmount: number; dueThisWeek: number; dueThisMonth: number; poCount: number; openPoCount: number; openPoTotal: number; byVendor: { vendor: string; total: number; count: number }[] }
 
+interface Vendor { id: number; name: string }
+
 const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(n)
 const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'
 const daysDiff = (d: string) => Math.floor((new Date(d).getTime() - Date.now()) / 86400000)
@@ -22,18 +24,25 @@ export function ApPage() {
   const [bills, setBills] = useState<Bill[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedPo, setExpandedPo] = useState<number | null>(null)
+  const [vendors, setVendors] = useState<Vendor[]>([])
+  const [showAddBill, setShowAddBill] = useState(false)
+  const [newBill, setNewBill] = useState({ vendorId: 0, vendorName: '', invoiceNumber: '', amount: '', dueDate: '', description: '' })
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [poR, billR] = await Promise.all([
+        const [poR, billR, vendorR] = await Promise.all([
           fetch('/api/ap/purchase-orders', { credentials: 'include' }),
           fetch('/api/ap/bills-enhanced', { credentials: 'include' }),
+          fetch('/api/ap/vendors', { credentials: 'include' }),
         ])
         const poData = await poR.json()
         const billData = await billR.json()
         if (Array.isArray(poData)) setPos(poData)
         if (Array.isArray(billData)) setBills(billData)
+        const vendorData = await vendorR.json()
+        if (Array.isArray(vendorData)) setVendors(vendorData)
       } catch {}
       try {
         const sumR = await fetch('/api/ap/summary', { credentials: 'include' })
@@ -46,6 +55,47 @@ export function ApPage() {
   }, [])
 
   if (loading) return <div className="flex items-center justify-center py-20"><span className="loading loading-spinner loading-lg text-primary" /></div>
+
+  const handleSaveBill = async () => {
+    if (!newBill.amount || !newBill.dueDate) return
+    setSaving(true)
+    try {
+      // Create vendor if new
+      let vendorId = newBill.vendorId
+      if (vendorId === 0 && newBill.vendorName.trim()) {
+        const vr = await fetch('/api/ap/vendors', {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: newBill.vendorName.trim() })
+        })
+        const vd = await vr.json()
+        if (vd.id) {
+          vendorId = vd.id
+          setVendors(prev => [...prev, { id: vd.id, name: vd.name }])
+        }
+      }
+      if (vendorId === 0) { setSaving(false); return }
+
+      const r = await fetch('/api/ap/bills', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vendorId,
+          invoiceNumber: newBill.invoiceNumber || newBill.description || 'Manual Entry',
+          amount: parseFloat(newBill.amount),
+          dueDate: newBill.dueDate
+        })
+      })
+      if (r.ok) {
+        const billsR = await fetch('/api/ap/bills-enhanced', { credentials: 'include' })
+        const billsD = await billsR.json()
+        if (Array.isArray(billsD)) setBills(billsD)
+        setShowAddBill(false)
+        setNewBill({ vendorId: 0, vendorName: '', invoiceNumber: '', amount: '', dueDate: '', description: '' })
+      }
+    } catch {}
+    setSaving(false)
+  }
 
   const unpaidBills = bills.filter(b => !b.isPaid)
 
@@ -180,6 +230,71 @@ export function ApPage() {
 
           {/* Bills Tab */}
           {tab === 'bills' && (
+            <div>
+              <div className="flex items-center justify-between px-4 py-3 border-b border-base-200">
+                <span className="text-sm text-base-content/50">{unpaidBills.length} unpaid bills</span>
+                <button onClick={() => setShowAddBill(!showAddBill)} className="btn btn-primary btn-xs gap-1">
+                  <span className="icon-[tabler--plus] size-3.5" />
+                  Add Bill
+                </button>
+              </div>
+
+              {showAddBill && (
+                <div className="px-4 py-3 bg-base-200/30 border-b border-base-200 space-y-3">
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div>
+                      <label className="text-xs text-base-content/50 mb-1 block">Vendor</label>
+                      <select
+                        value={newBill.vendorId}
+                        onChange={e => {
+                          const id = Number(e.target.value)
+                          setNewBill(p => ({ ...p, vendorId: id, vendorName: id === -1 ? '' : vendors.find(v => v.id === id)?.name || '' }))
+                        }}
+                        className="select select-sm select-bordered w-full"
+                      >
+                        <option value={0}>Select vendor...</option>
+                        {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                        <option value={-1}>+ New vendor</option>
+                      </select>
+                    </div>
+                    {newBill.vendorId === -1 && (
+                      <div>
+                        <label className="text-xs text-base-content/50 mb-1 block">New Vendor Name</label>
+                        <input type="text" placeholder="e.g. Shell Gas Card" value={newBill.vendorName}
+                          onChange={e => setNewBill(p => ({ ...p, vendorName: e.target.value }))}
+                          className="input input-sm input-bordered w-full" />
+                      </div>
+                    )}
+                    <div>
+                      <label className="text-xs text-base-content/50 mb-1 block">Description / Ref #</label>
+                      <input type="text" placeholder="e.g. Gas Card March" value={newBill.invoiceNumber}
+                        onChange={e => setNewBill(p => ({ ...p, invoiceNumber: e.target.value }))}
+                        className="input input-sm input-bordered w-full" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-base-content/50 mb-1 block">Amount</label>
+                      <input type="number" step="0.01" placeholder="0.00" value={newBill.amount}
+                        onChange={e => setNewBill(p => ({ ...p, amount: e.target.value }))}
+                        className="input input-sm input-bordered w-full" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-base-content/50 mb-1 block">Due Date</label>
+                      <input type="date" value={newBill.dueDate}
+                        onChange={e => setNewBill(p => ({ ...p, dueDate: e.target.value }))}
+                        className="input input-sm input-bordered w-full" />
+                    </div>
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <button onClick={() => setShowAddBill(false)} className="btn btn-ghost btn-xs">Cancel</button>
+                    <button onClick={handleSaveBill} disabled={saving || !newBill.amount || !newBill.dueDate || (newBill.vendorId === 0 && !newBill.vendorName)}
+                      className="btn btn-primary btn-xs gap-1">
+                      {saving ? <span className="loading loading-spinner loading-xs" /> : <span className="icon-[tabler--check] size-3.5" />}
+                      Save
+                    </button>
+                  </div>
+                </div>
+              )}
+
             <div className="overflow-x-auto">
               {unpaidBills.length > 0 ? (
                 <table className="table table-sm">
@@ -208,6 +323,7 @@ export function ApPage() {
                   </tbody>
                 </table>
               ) : <p className="text-sm text-base-content/40 px-4 py-4">No unpaid bills</p>}
+            </div>
             </div>
           )}
         </div>
