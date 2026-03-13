@@ -431,12 +431,6 @@ public class ServiceTitanClient
 
 
     // GET customer contacts export
-    public async Task<string> GetCustomerContactsExportAsync(string accessToken, string stTenantId, string? from = null)
-    {
-        var url = $"{BaseUrl}/crm/v2/tenant/{stTenantId}/export/customers/contacts";
-        if (from != null) url += $"?from={Uri.EscapeDataString(from)}";
-        return await GetAsync(accessToken, url);
-    }
 
 
     // GET raw customer export (first page only, for debugging)
