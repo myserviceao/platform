@@ -5,6 +5,7 @@ import { LoginPage } from '@/pages/App/LoginPage'
 import { DashboardPage } from '@/pages/App/Dashboard/DashboardPage'
 import { PmTrackerPage } from '@/pages/App/PmTracker/PmTrackerPage'
 import { SettingsPage } from '@/pages/App/Settings/SettingsPage'
+import { CallTrackingPage } from '@/pages/App/CallTracking/CallTrackingPage'
 import { CashFlowPage } from '@/pages/App/CashFlow/CashFlowPage'
 import { AppShell } from '@/components/layout/AppShell'
 import ServiceTitanPage from '@/pages/App/ServiceTitanPage'
@@ -55,6 +56,7 @@ function AppRoutes() {
                       <Route path="wo-board" element={<WoBoardPage />} />
                       <Route path="hold-board" element={<HoldBoardPage />} />
                       <Route path="ap" element={<ApPage />} />
+                      <Route path="call-tracking" element={<CallTrackingPage />} />
                       <Route path="cash-flow" element={<CashFlowPage />} />
                       <Route path="settings" element={<SettingsPage />} />
                       <Route path="customers" element={<CustomersPage />} />
