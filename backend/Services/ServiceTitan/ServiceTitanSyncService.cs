@@ -12,12 +12,13 @@ public class ServiceTitanSyncService
     private readonly ServiceTitanOAuthService _oauth;
     private readonly ILogger<ServiceTitanSyncService> _logger;
     private readonly OutreachService _outreach;
+    private readonly ArAlertsService _arAlerts;
 
     private static readonly string[] PmKeywords = { "maintenance", "tune up", "tune-up", "pm" };
 
-    public ServiceTitanSyncService(AppDbContext db, ServiceTitanClient client, ServiceTitanOAuthService oauth, OutreachService outreach, ILogger<ServiceTitanSyncService> logger)
+    public ServiceTitanSyncService(AppDbContext db, ServiceTitanClient client, ServiceTitanOAuthService oauth, OutreachService outreach, ArAlertsService arAlerts, ILogger<ServiceTitanSyncService> logger)
     {
-        _db = db; _client = client; _oauth = oauth; _outreach = outreach; _logger = logger;
+        _db = db; _client = client; _oauth = oauth; _outreach = outreach; _arAlerts = arAlerts; _logger = logger;
     }
 
     private static DateTime ToUtc(DateTime dt) => dt.Kind == DateTimeKind.Unspecified 
@@ -976,6 +977,16 @@ public class ServiceTitanSyncService
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "[Sync] Outreach generation failed (non-fatal)");
+            }
+
+            // Generate AR reminders
+            try
+            {
+                await _arAlerts.GenerateArRemindersAsync(tenantId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[Sync] AR reminder generation failed (non-fatal)");
             }
 
             // Update snapshot timestamp

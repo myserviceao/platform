@@ -25,6 +25,8 @@ public class AppDbContext : DbContext
     public DbSet<OutreachTemplate> OutreachTemplates => Set<OutreachTemplate>();
     public DbSet<OutreachItem> OutreachItems => Set<OutreachItem>();
     public DbSet<OutreachSettings> OutreachSettings => Set<OutreachSettings>();
+    public DbSet<ArContactLog> ArContactLogs => Set<ArContactLog>();
+    public DbSet<ArStatus> ArStatuses => Set<ArStatus>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -196,6 +198,22 @@ public class AppDbContext : DbContext
             e.HasKey(s => s.Id);
             e.HasIndex(s => s.TenantId).IsUnique();
             e.HasOne(s => s.Tenant).WithMany().HasForeignKey(s => s.TenantId);
+        });
+
+        // ArContactLog
+        modelBuilder.Entity<ArContactLog>(e =>
+        {
+            e.HasKey(l => l.Id);
+            e.HasOne(l => l.Tenant).WithMany().HasForeignKey(l => l.TenantId);
+        });
+
+        // ArStatus
+        modelBuilder.Entity<ArStatus>(e =>
+        {
+            e.HasKey(s => s.Id);
+            e.HasIndex(s => new { s.TenantId, s.CustomerId }).IsUnique();
+            e.HasOne(s => s.Tenant).WithMany().HasForeignKey(s => s.TenantId);
+            e.Property(s => s.PaymentPlanAmount).HasColumnType("numeric(18,2)");
         });
 
         // ApBill (AP invoices)

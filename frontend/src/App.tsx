@@ -17,6 +17,7 @@ import { OutreachPage } from '@/pages/App/Outreach/OutreachPage'
 import { PmPlannerPage } from '@/pages/App/PmPlanner/PmPlannerPage'
 import { WoBoardPage } from '@/pages/App/WoBoard/WoBoardPage'
 import { HoldBoardPage } from '@/pages/App/HoldBoard/HoldBoardPage'
+import { ArAlertsPage } from '@/pages/App/ArAlerts/ArAlertsPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const auth = useAuthProvider()
@@ -63,6 +64,7 @@ function AppRoutes() {
                       <Route path="outreach" element={<OutreachPage />} />
                       <Route path="customers" element={<CustomersPage />} />
                       <Route path="customers/:id" element={<CustomerDetailPage />} />
+                      <Route path="ar-alerts" element={<ArAlertsPage />} />
                       <Route path="servicetitan" element={<ServiceTitanPage />} />
                       <Route path="*" element={
                         <div className="flex items-center justify-center h-64 text-base-content/40 text-sm">

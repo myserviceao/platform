@@ -42,6 +42,7 @@ builder.Services.AddHttpClient<ServiceTitanClient>();
 builder.Services.AddScoped<ServiceTitanOAuthService>();
 builder.Services.AddScoped<ServiceTitanSyncService>();
 builder.Services.AddScoped<OutreachService>();
+builder.Services.AddScoped<ArAlertsService>();
 builder.Services.AddHostedService<SyncSchedulerService>();
 
 // ââ Controllers âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ

@@ -62,6 +62,13 @@ public class OutreachService
                 Body = "Hi {{customerName}},\n\nThe season is changing and it's a great time to make sure your HVAC system is ready. We're offering seasonal tune-ups to keep your home comfortable all year round.\n\nCall us today to schedule your appointment!\n\nBest,\n{{companyName}}" },
             new() { TenantId = tenantId, Name = "Seasonal Campaign - SMS", Type = "seasonal", Channel = "sms", IsDefault = true,
                 Body = "Hi {{customerName}}, seasonal tune-up time! Call us to schedule and keep your system running smoothly. - {{companyName}}" },
+
+            // AR Reminder
+            new() { TenantId = tenantId, Name = "AR Reminder - Email", Type = "ar_reminder", Channel = "email", IsDefault = true,
+                Subject = "Outstanding balance on your account",
+                Body = "Hi {{customerName}},\n\nThis is a friendly reminder that you have an outstanding balance of {{totalOwed}} with {{invoiceCount}} open invoice(s). The oldest invoice is {{oldestInvoiceAge}} days past due.\n\nPlease contact us to arrange payment or if you have any questions about your account.\n\nThank you,\n{{companyName}}" },
+            new() { TenantId = tenantId, Name = "AR Reminder - SMS", Type = "ar_reminder", Channel = "sms", IsDefault = true,
+                Body = "Hi {{customerName}}, you have an outstanding balance of {{totalOwed}} ({{oldestInvoiceAge}} days). Please contact us to arrange payment. - {{companyName}}" },
         };
 
         _db.OutreachTemplates.AddRange(defaults);

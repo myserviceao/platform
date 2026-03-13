@@ -320,5 +320,34 @@ public static class DbMigrations
             );
         ");
 
+        // ArContactLogs table
+        await db.Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS ""ArContactLogs"" (
+                ""Id"" SERIAL PRIMARY KEY,
+                ""TenantId"" INTEGER NOT NULL REFERENCES ""Tenants""(""Id"") ON DELETE CASCADE,
+                ""CustomerId"" INTEGER NOT NULL,
+                ""ContactType"" TEXT NOT NULL DEFAULT 'call',
+                ""Outcome"" TEXT NOT NULL DEFAULT '',
+                ""Notes"" TEXT,
+                ""FollowUpDate"" TIMESTAMP WITH TIME ZONE,
+                ""CreatedAt"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+            );
+        ");
+
+        // ArStatuses table
+        await db.Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS ""ArStatuses"" (
+                ""Id"" SERIAL PRIMARY KEY,
+                ""TenantId"" INTEGER NOT NULL REFERENCES ""Tenants""(""Id"") ON DELETE CASCADE,
+                ""CustomerId"" INTEGER NOT NULL,
+                ""Status"" TEXT NOT NULL DEFAULT 'active',
+                ""PaymentPlanAmount"" NUMERIC(18,2),
+                ""PaymentPlanNote"" TEXT,
+                ""StatusChangedAt"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                ""UpdatedAt"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                UNIQUE(""TenantId"", ""CustomerId"")
+            );
+        ");
+
     }
 }
