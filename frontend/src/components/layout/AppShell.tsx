@@ -45,6 +45,11 @@ function isGroup(entry: NavEntry): entry is NavGroup {
 const navItems: NavEntry[] = [
   {
     label: 'Dashboard',
+  },
+  {
+    label: 'Call Tracking',
+    icon: 'icon-[tabler--phone]',
+    path: '/app/call-tracking',
     icon: 'icon-[tabler--layout-dashboard]',
     path: '/app/dashboard',
   },
@@ -125,6 +130,7 @@ const pageResults: SearchResult[] = [
   { type: 'page', label: 'Settings', path: '/app/settings' },
   { type: 'page', label: 'ServiceTitan', path: '/app/servicetitan' },
   { type: 'page', label: 'AR Alerts', path: '/app/ar-alerts' },
+  { type: 'page', label: 'Call Tracking', path: '/app/call-tracking' },
   { type: 'page', label: 'Cash Flow', path: '/app/cash-flow' },
 ]
 
