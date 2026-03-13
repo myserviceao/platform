@@ -11,12 +11,13 @@ public class ServiceTitanSyncService
     private readonly ServiceTitanClient _client;
     private readonly ServiceTitanOAuthService _oauth;
     private readonly ILogger<ServiceTitanSyncService> _logger;
+    private readonly OutreachService _outreach;
 
     private static readonly string[] PmKeywords = { "maintenance", "tune up", "tune-up", "pm" };
 
-    public ServiceTitanSyncService(AppDbContext db, ServiceTitanClient client, ServiceTitanOAuthService oauth, ILogger<ServiceTitanSyncService> logger)
+    public ServiceTitanSyncService(AppDbContext db, ServiceTitanClient client, ServiceTitanOAuthService oauth, OutreachService outreach, ILogger<ServiceTitanSyncService> logger)
     {
-        _db = db; _client = client; _oauth = oauth; _logger = logger;
+        _db = db; _client = client; _oauth = oauth; _outreach = outreach; _logger = logger;
     }
 
     private static DateTime ToUtc(DateTime dt) => dt.Kind == DateTimeKind.Unspecified 
@@ -219,6 +220,13 @@ public class ServiceTitanSyncService
                             System.Globalization.DateTimeStyles.AdjustToUniversal, out var crDate))
                             createdOn = DateTime.SpecifyKind(crDate, DateTimeKind.Utc);
 
+                    DateTime? completedOn = null;
+                    if (job.TryGetProperty("completedOn", out var compProp) && compProp.ValueKind == JsonValueKind.String)
+                        if (DateTime.TryParse(compProp.GetString(), null,
+                            System.Globalization.DateTimeStyles.AssumeUniversal |
+                            System.Globalization.DateTimeStyles.AdjustToUniversal, out var compDate))
+                            completedOn = DateTime.SpecifyKind(compDate, DateTimeKind.Utc);
+
                     var existingJob = await _db.Jobs
                         .FirstOrDefaultAsync(j => j.TenantId == tenantId && j.StJobId == stJobId);
 
@@ -235,6 +243,7 @@ public class ServiceTitanSyncService
                             JobTypeName = jobTypeName,
                             TotalAmount = totalAmount,
                             CreatedOn = createdOn,
+                            CompletedOn = completedOn,
                             UpdatedAt = DateTime.UtcNow
                         ,
                             HoldReasonName = status == "Hold" && tagToHoldReason.Count > 0
@@ -256,6 +265,7 @@ public class ServiceTitanSyncService
                         existingJob.Status = status;
                         existingJob.JobTypeName = jobTypeName;
                         existingJob.TotalAmount = totalAmount;
+                        existingJob.CompletedOn = completedOn;
                         existingJob.TagTypeIds = tagTypeIdsStr;
                         existingJob.UpdatedAt = DateTime.UtcNow;
 
@@ -283,13 +293,6 @@ public class ServiceTitanSyncService
 
                     if (jobTypeName != null && PmKeywords.Any(k => jobTypeName.ToLower().Contains(k)))
                     {
-                        DateTime? completedOn = null;
-                        if (job.TryGetProperty("completedOn", out var coProp) && coProp.ValueKind == JsonValueKind.String)
-                            if (DateTime.TryParse(coProp.GetString(), null,
-                                System.Globalization.DateTimeStyles.AssumeUniversal |
-                                System.Globalization.DateTimeStyles.AdjustToUniversal, out var pc))
-                                completedOn = DateTime.SpecifyKind(pc, DateTimeKind.Utc);
-
                         var pmDate = completedOn ?? createdOn;
                         if (pmDate.HasValue && customerId > 0)
                         {
@@ -964,6 +967,16 @@ public class ServiceTitanSyncService
                     job.TechnicianName = string.Join(", ", appt.Technicians.Select(t => t.TechnicianName));
             }
             await _db.SaveChangesAsync();
+
+            // Generate outreach items
+            try
+            {
+                await _outreach.GenerateOutreachItemsAsync(tenantId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[Sync] Outreach generation failed (non-fatal)");
+            }
 
             // Update snapshot timestamp
             var snapshot = await _db.DashboardSnapshots.FirstOrDefaultAsync(s => s.TenantId == tenantId);

@@ -19,5 +19,6 @@ public class Job
     public decimal TotalAmount { get; set; }
 
     public DateTime? CreatedOn { get; set; }
+    public DateTime? CompletedOn { get; set; }
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

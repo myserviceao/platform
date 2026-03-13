@@ -13,6 +13,7 @@ import { CustomersPage } from '@/pages/App/Customers/CustomersPage'
 import { CustomerDetailPage } from '@/pages/App/Customers/CustomerDetailPage'
 import { ApPage } from '@/pages/App/Ap/ApPage'
 import { PmOutreachPage } from '@/pages/App/PmOutreach/PmOutreachPage'
+import { OutreachPage } from '@/pages/App/Outreach/OutreachPage'
 import { PmPlannerPage } from '@/pages/App/PmPlanner/PmPlannerPage'
 import { WoBoardPage } from '@/pages/App/WoBoard/WoBoardPage'
 import { HoldBoardPage } from '@/pages/App/HoldBoard/HoldBoardPage'
@@ -59,6 +60,7 @@ function AppRoutes() {
                       <Route path="call-tracking" element={<CallTrackingPage />} />
                       <Route path="cash-flow" element={<CashFlowPage />} />
                       <Route path="settings" element={<SettingsPage />} />
+                      <Route path="outreach" element={<OutreachPage />} />
                       <Route path="customers" element={<CustomersPage />} />
                       <Route path="customers/:id" element={<CustomerDetailPage />} />
                       <Route path="servicetitan" element={<ServiceTitanPage />} />

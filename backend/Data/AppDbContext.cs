@@ -22,6 +22,9 @@ public class AppDbContext : DbContext
     public DbSet<ApBill> ApBills => Set<ApBill>();
     public DbSet<CustomerLocation> CustomerLocations => Set<CustomerLocation>();
     public DbSet<HoldReason> HoldReasons => Set<HoldReason>();
+    public DbSet<OutreachTemplate> OutreachTemplates => Set<OutreachTemplate>();
+    public DbSet<OutreachItem> OutreachItems => Set<OutreachItem>();
+    public DbSet<OutreachSettings> OutreachSettings => Set<OutreachSettings>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -171,6 +174,28 @@ public class AppDbContext : DbContext
             e.Property(i => i.QuantityReceived).HasColumnType("numeric(18,2)");
             e.Property(i => i.Cost).HasColumnType("numeric(18,2)");
             e.Property(i => i.Total).HasColumnType("numeric(18,2)");
+        });
+
+        // OutreachTemplate
+        modelBuilder.Entity<OutreachTemplate>(e =>
+        {
+            e.HasKey(t => t.Id);
+            e.HasOne(t => t.Tenant).WithMany().HasForeignKey(t => t.TenantId);
+        });
+
+        // OutreachItem
+        modelBuilder.Entity<OutreachItem>(e =>
+        {
+            e.HasKey(i => i.Id);
+            e.HasOne(i => i.Tenant).WithMany().HasForeignKey(i => i.TenantId);
+        });
+
+        // OutreachSettings
+        modelBuilder.Entity<OutreachSettings>(e =>
+        {
+            e.HasKey(s => s.Id);
+            e.HasIndex(s => s.TenantId).IsUnique();
+            e.HasOne(s => s.Tenant).WithMany().HasForeignKey(s => s.TenantId);
         });
 
         // ApBill (AP invoices)

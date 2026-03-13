@@ -262,5 +262,63 @@ public static class DbMigrations
             ALTER TABLE ""ApBills"" DROP CONSTRAINT IF EXISTS ""ApBills_VendorId_fkey"";
         ");
 
+        // Add CompletedOn to Jobs
+        await db.Database.ExecuteSqlRawAsync(@"
+            ALTER TABLE ""Jobs"" ADD COLUMN IF NOT EXISTS ""CompletedOn"" TIMESTAMP WITH TIME ZONE;
+        ");
+
+        // OutreachTemplates table
+        await db.Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS ""OutreachTemplates"" (
+                ""Id"" SERIAL PRIMARY KEY,
+                ""TenantId"" INTEGER NOT NULL REFERENCES ""Tenants""(""Id"") ON DELETE CASCADE,
+                ""Name"" TEXT NOT NULL DEFAULT '',
+                ""Type"" TEXT NOT NULL DEFAULT '',
+                ""Channel"" TEXT NOT NULL DEFAULT 'email',
+                ""Subject"" TEXT,
+                ""Body"" TEXT NOT NULL DEFAULT '',
+                ""IsDefault"" BOOLEAN NOT NULL DEFAULT FALSE,
+                ""CreatedAt"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                ""UpdatedAt"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+            );
+        ");
+
+        // OutreachItems table
+        await db.Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS ""OutreachItems"" (
+                ""Id"" SERIAL PRIMARY KEY,
+                ""TenantId"" INTEGER NOT NULL REFERENCES ""Tenants""(""Id"") ON DELETE CASCADE,
+                ""CustomerId"" INTEGER NOT NULL,
+                ""JobId"" INTEGER,
+                ""Type"" TEXT NOT NULL DEFAULT '',
+                ""Channel"" TEXT NOT NULL DEFAULT 'email',
+                ""Status"" TEXT NOT NULL DEFAULT 'pending',
+                ""FailureReason"" TEXT,
+                ""Subject"" TEXT,
+                ""Body"" TEXT NOT NULL DEFAULT '',
+                ""ScheduledFor"" TIMESTAMP WITH TIME ZONE,
+                ""SentAt"" TIMESTAMP WITH TIME ZONE,
+                ""DismissedAt"" TIMESTAMP WITH TIME ZONE,
+                ""CreatedAt"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                ""UpdatedAt"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+            );
+        ");
+
+        // OutreachSettings table
+        await db.Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS ""OutreachSettings"" (
+                ""Id"" SERIAL PRIMARY KEY,
+                ""TenantId"" INTEGER NOT NULL REFERENCES ""Tenants""(""Id"") ON DELETE CASCADE,
+                ""WinBackThresholdMonths"" INTEGER NOT NULL DEFAULT 12,
+                ""PostServiceDelayHours"" INTEGER NOT NULL DEFAULT 48,
+                ""ResendApiKey"" TEXT,
+                ""ResendFromEmail"" TEXT,
+                ""TwilioAccountSid"" TEXT,
+                ""TwilioAuthToken"" TEXT,
+                ""TwilioFromPhone"" TEXT,
+                UNIQUE(""TenantId"")
+            );
+        ");
+
     }
 }

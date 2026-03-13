@@ -63,11 +63,6 @@ const navItems: NavEntry[] = [
         path: '/app/pm-tracker',
       },
       {
-        label: 'PM Outreach',
-        icon: 'icon-[tabler--send]',
-        path: '/app/pm-outreach',
-      },
-      {
         label: 'PM Planner',
         icon: 'icon-[tabler--map-pin]',
         path: '/app/pm-planner',
@@ -94,6 +89,11 @@ const navItems: NavEntry[] = [
     label: 'Customers',
     icon: 'icon-[tabler--users]',
     path: '/app/customers',
+  },
+  {
+    label: 'Outreach',
+    icon: 'icon-[tabler--mail-forward]',
+    path: '/app/outreach',
   },
   {
     label: 'Accounts Payable',
@@ -126,6 +126,7 @@ const pageResults: SearchResult[] = [
   { type: 'page', label: 'PM Tracker', path: '/app/pm-tracker' },
   { type: 'page', label: 'PM Outreach', path: '/app/pm-outreach' },
   { type: 'page', label: 'Customers', path: '/app/customers' },
+  { type: 'page', label: 'Outreach', path: '/app/outreach' },
   { type: 'page', label: 'Work Orders', path: '/app/work-orders' },
   { type: 'page', label: 'Settings', path: '/app/settings' },
   { type: 'page', label: 'ServiceTitan', path: '/app/servicetitan' },
