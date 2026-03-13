@@ -120,6 +120,39 @@ public class ServiceTitanClient
             if (!hasMore) break;
         } while (continueFrom != null);
         _logger.LogInformation("[ST] Customer data map loaded count={Count}", map.Count);
+        // Step 2: Get contacts (phone, email) from export/customers/contacts
+        try
+        {
+            string? contactsFrom = null;
+            do
+            {
+                var contactsRaw = await GetCustomerContactsExportAsync(accessToken, stTenantId, contactsFrom);
+                var contactsDoc = System.Text.Json.JsonDocument.Parse(contactsRaw);
+                var contactsRoot = contactsDoc.RootElement;
+                if (!contactsRoot.TryGetProperty("data", out var contactsData)) break;
+                foreach (var contact in contactsData.EnumerateArray())
+                {
+                    var custId = contact.TryGetProperty("customerId", out var cidProp) ? cidProp.GetInt64() : 0;
+                    if (custId == 0 || !map.ContainsKey(custId)) continue;
+                    var active = !contact.TryGetProperty("active", out var actProp) || actProp.GetBoolean();
+                    if (!active) continue;
+
+                    var type = contact.TryGetProperty("type", out var typeProp) ? typeProp.GetString() ?? "" : "";
+                    var value = contact.TryGetProperty("value", out var valProp) ? valProp.GetString() ?? "" : "";
+                    if (string.IsNullOrWhiteSpace(value)) continue;
+
+                    var existing = map[custId];
+                    if ((type == "Phone" || type == "MobilePhone" || type == "Landline") && existing.Phone == null)
+                        map[custId] = existing with { Phone = value };
+                    else if (type == "Email" && existing.Email == null)
+                        map[custId] = existing with { Email = value };
+                }
+                var hasMoreContacts = contactsRoot.TryGetProperty("hasMore", out var hmcProp) && hmcProp.GetBoolean();
+                contactsFrom = hasMoreContacts && contactsRoot.TryGetProperty("continueFrom", out var ccf) ? ccf.GetString() : null;
+            } while (!string.IsNullOrEmpty(contactsFrom));
+        }
+        catch (Exception) { /* Contacts export may fail - continue with name/address only */ }
+
         return map;
     }
 
@@ -393,6 +426,16 @@ public class ServiceTitanClient
     {
         var url = $"{BaseUrl}/telecom/v3/tenant/{stTenantId}/calls?pageSize={pageSize}&page={page}";
         if (createdOnOrAfter != null) url += $"&createdOnOrAfter={createdOnOrAfter}";
+        return await GetAsync(accessToken, url);
+    }
+
+
+
+
+    // GET raw customer export (first page only, for debugging)
+    public async Task<string> GetCustomersExportRawAsync(string accessToken, string stTenantId)
+    {
+        var url = $"{BaseUrl}/crm/v2/tenant/{stTenantId}/export/customers";
         return await GetAsync(accessToken, url);
     }
 

@@ -614,4 +614,46 @@ public class DashboardController : ControllerBase
         });
     }
 
+
+    [HttpGet("raw-customer-contacts")]
+    public async Task<IActionResult> GetRawCustomerContacts()
+    {
+        var tenantId = HttpContext.Session.GetInt32("tenantId");
+        if (tenantId == null) return Unauthorized();
+        try
+        {
+            var token = await _sync.GetTokenAsync(tenantId.Value);
+            var tenant = await _db.Tenants.FindAsync(tenantId.Value);
+            if (token == null || tenant == null) return BadRequest("No ST connection");
+            var client = HttpContext.RequestServices.GetRequiredService<MyServiceAO.Services.ServiceTitan.ServiceTitanClient>();
+            var raw = await client.GetCustomerContactsExportAsync(token, tenant.StTenantId!);
+            return Content(raw, "application/json");
+        }
+        catch (Exception ex)
+        {
+            return Ok(new { error = ex.InnerException?.Message ?? ex.Message, stack = ex.StackTrace?.Substring(0, 300) });
+        }
+    }
+
+    [HttpGet("raw-customer-sample")]
+    public async Task<IActionResult> GetRawCustomerSample()
+    {
+        var tenantId = HttpContext.Session.GetInt32("tenantId");
+        if (tenantId == null) return Unauthorized();
+        try
+        {
+            var token = await _sync.GetTokenAsync(tenantId.Value);
+            var tenant = await _db.Tenants.FindAsync(tenantId.Value);
+            if (token == null || tenant == null) return BadRequest("No ST connection");
+            var client = HttpContext.RequestServices.GetRequiredService<MyServiceAO.Services.ServiceTitan.ServiceTitanClient>();
+            var url = $"https://api.servicetitan.io/crm/v2/tenant/{tenant.StTenantId}/export/customers";
+            var raw = await client.GetCustomersExportRawAsync(token, tenant.StTenantId!);
+            return Content(raw, "application/json");
+        }
+        catch (Exception ex)
+        {
+            return Ok(new { error = ex.InnerException?.Message ?? ex.Message });
+        }
+    }
+
 }
