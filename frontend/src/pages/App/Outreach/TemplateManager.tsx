@@ -115,7 +115,7 @@ export function TemplateManager() {
   const renderPreview = (text: string) => {
     let result = text
     for (const [key, value] of Object.entries(SAMPLE_DATA))
-      result = result.replaceAll(`{{${key}}}`, value)
+      result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value)
     return result
   }
 
