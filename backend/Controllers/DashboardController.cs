@@ -157,7 +157,6 @@ public class DashboardController : ControllerBase
             ARbyCustomer = arByCustomer,
             RevenueThisMonth = revenueThisMonth,
             RevenueLastMonth = revenueLastMonth,
-            ForecastedRevenue = now.Day > 0 ? revenueThisMonth / now.Day * DateTime.DaysInMonth(now.Year, now.Month) : 0,
             DaysInMonth = DateTime.DaysInMonth(now.Year, now.Month),
             DaysElapsed = now.Day,
             NeedToSchedule = openWos.Count(w => w.Status == "Hold"),

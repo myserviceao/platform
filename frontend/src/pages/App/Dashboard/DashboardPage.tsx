@@ -62,7 +62,6 @@ interface DashboardData {
   aRbyCustomer: ArCustomer[]
   revenueThisMonth: number
   revenueLastMonth: number
-  forecastedRevenue: number
   totalAP: number
   apNextDueDays: number
   netPosition: number
@@ -178,8 +177,7 @@ export function DashboardPage() {
   const aging = d?.aRaging
   const change = d ? revPct(d.revenueThisMonth, d.revenueLastMonth) : null
   const prevMonthName = new Date(Date.now() - 30 * 86400000).toLocaleString('en-US', { month: 'short' })
-  const daysLeft = (d?.daysInMonth ?? 30) - (d?.daysElapsed ?? 0)
-  const forecastedRevenue = d?.forecastedRevenue ?? 0
+
 
   const activeSchedule: DaySchedule | null =
     schedTab === 'today'    ? (d?.scheduledToday    ?? null) :
@@ -222,8 +220,8 @@ export function DashboardPage() {
         </div>
       )}
 
-      {/* ── Row 1: Financial KPIs (5 cards) ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      {/* ── Row 1: Financial KPIs (4 cards) ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatTile
           borderColor="border-t-blue-500"
           label="Total AR"
@@ -249,12 +247,6 @@ export function DashboardPage() {
           value={fmt(d?.revenueThisMonth ?? 0)}
           sub={change ? `${change.up ? '↑' : '↓'} ${change.pct}% vs ${prevMonthName}` : `Last: ${fmtShort(d?.revenueLastMonth ?? 0)}`}
           subColor={change ? (change.up ? 'text-success' : 'text-error') : undefined}
-        />
-        <StatTile
-          borderColor="border-t-indigo-500"
-          label="Forecasted Revenue"
-          value={fmt(forecastedRevenue)}
-          sub={`${daysLeft}d left · ${d?.openWoCount ?? 0} open jobs`}
         />
       </div>
 
