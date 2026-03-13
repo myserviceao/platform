@@ -109,51 +109,46 @@ public class OutreachController : ControllerBase
         return Ok(item);
     }
 
-    // POST /api/outreach/{id}/send
+    // POST /api/outreach/{id}/send — marks item as sent (user sends via native email/sms client)
     [HttpPost("{id:int}/send")]
     public async Task<IActionResult> Send(int id)
-    {
-        if (TenantId == null) return Unauthorized();
-        var success = await _outreach.SendItemAsync(id, TenantId.Value);
-        return Ok(new { success });
-    }
-
-    // POST /api/outreach/{id}/mark-sent — marks item as sent (user sent manually via email/sms client)
-    [HttpPost("{id:int}/mark-sent")]
-    public async Task<IActionResult> MarkSent(int id)
     {
         if (TenantId == null) return Unauthorized();
         var item = await _db.OutreachItems.FirstOrDefaultAsync(i => i.Id == id && i.TenantId == TenantId.Value);
         if (item == null) return NotFound();
         item.Status = "sent";
         item.SentAt = DateTime.UtcNow;
+        item.FailureReason = null;
         item.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
         return Ok(new { success = true });
     }
 
-    // POST /api/outreach/{id}/retry
-    [HttpPost("{id:int}/retry")]
-    public async Task<IActionResult> Retry(int id)
-    {
-        if (TenantId == null) return Unauthorized();
-        var item = await _db.OutreachItems.FirstOrDefaultAsync(i => i.Id == id && i.TenantId == TenantId.Value);
-        if (item == null) return NotFound();
-        item.Status = "pending";
-        item.FailureReason = null;
-        item.UpdatedAt = DateTime.UtcNow;
-        await _db.SaveChangesAsync();
-        var success = await _outreach.SendItemAsync(id, TenantId.Value);
-        return Ok(new { success });
-    }
+    // POST /api/outreach/{id}/mark-sent — alias for send
+    [HttpPost("{id:int}/mark-sent")]
+    public async Task<IActionResult> MarkSent(int id) => await Send(id);
 
-    // POST /api/outreach/bulk-send
+    // POST /api/outreach/{id}/retry — clears failure and marks as sent
+    [HttpPost("{id:int}/retry")]
+    public async Task<IActionResult> Retry(int id) => await Send(id);
+
+    // POST /api/outreach/bulk-send — marks all as sent
     [HttpPost("bulk-send")]
     public async Task<IActionResult> BulkSend([FromBody] BulkRequest req)
     {
         if (TenantId == null) return Unauthorized();
-        var (sent, failed) = await _outreach.BulkSendAsync(req.Ids, TenantId.Value);
-        return Ok(new { sent, failed });
+        var items = await _db.OutreachItems
+            .Where(i => req.Ids.Contains(i.Id) && i.TenantId == TenantId.Value)
+            .ToListAsync();
+        foreach (var item in items)
+        {
+            item.Status = "sent";
+            item.SentAt = DateTime.UtcNow;
+            item.FailureReason = null;
+            item.UpdatedAt = DateTime.UtcNow;
+        }
+        await _db.SaveChangesAsync();
+        return Ok(new { sent = items.Count, failed = 0 });
     }
 
     // POST /api/outreach/{id}/dismiss
