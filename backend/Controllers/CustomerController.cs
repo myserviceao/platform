@@ -53,6 +53,9 @@ public class CustomerController : ControllerBase
             {
                 id = c.Id.ToString(),
                 name = c.Name,
+                address = c.Address,
+                phone = c.Phone,
+                email = c.Email,
                 serviceTitanCustomerId = c.StCustomerId,
                 totalBalance = balance,
                 openWoCount = openWos,
@@ -97,6 +100,7 @@ public class CustomerController : ControllerBase
             .ToListAsync();
 
         var totalBalance = invoices.Sum(i => i.BalanceRemaining);
+        var lifetimeSpend = invoices.Sum(i => i.TotalAmount);
         var openStatuses = new[] { "InProgress", "Scheduled", "Hold", "Dispatched" };
         var openWoCount = jobs.Count(j => openStatuses.Contains(j.Status));
 
@@ -104,8 +108,12 @@ public class CustomerController : ControllerBase
         {
             id = customer.Id.ToString(),
             name = customer.Name,
+            address = customer.Address,
+            phone = customer.Phone,
+            email = customer.Email,
             serviceTitanCustomerId = customer.StCustomerId,
             totalBalance,
+            lifetimeSpend,
             openWoCount,
             jobCount = jobs.Count,
             lastPmDate = pm?.LastPmDate,
@@ -114,6 +122,7 @@ public class CustomerController : ControllerBase
             {
                 jobNumber = j.JobNumber,
                 jobTypeName = j.JobTypeName,
+                technicianName = j.TechnicianName,
                 status = j.Status,
                 createdOn = j.CreatedOn,
                 totalAmount = j.TotalAmount

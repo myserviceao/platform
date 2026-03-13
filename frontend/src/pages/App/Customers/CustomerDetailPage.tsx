@@ -4,6 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 interface JobRow {
   jobNumber: string
   jobTypeName: string | null
+  technicianName: string | null
   status: string
   createdOn: string | null
   totalAmount: number
@@ -19,8 +20,12 @@ interface InvoiceRow {
 interface CustomerDetail {
   id: string
   name: string
+  address: string | null
+  phone: string | null
+  email: string | null
   serviceTitanCustomerId: number
   totalBalance: number
+  lifetimeSpend: number
   openWoCount: number
   jobCount: number
   lastPmDate: string | null
@@ -113,12 +118,38 @@ export function CustomerDetailPage() {
             <div className="text-sm text-base-content/50 mt-0.5">
               ServiceTitan #{customer.serviceTitanCustomerId}
             </div>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-base-content/60">
+              {customer.address && (
+                <span className="flex items-center gap-1.5">
+                  <span className="icon-[tabler--map-pin] size-3.5 shrink-0" />
+                  {customer.address}
+                </span>
+              )}
+              {customer.phone && (
+                <a href={`tel:${customer.phone}`} className="flex items-center gap-1.5 hover:text-primary transition-colors">
+                  <span className="icon-[tabler--phone] size-3.5 shrink-0" />
+                  {customer.phone}
+                </a>
+              )}
+              {customer.email && (
+                <a href={`mailto:${customer.email}`} className="flex items-center gap-1.5 hover:text-primary transition-colors">
+                  <span className="icon-[tabler--mail] size-3.5 shrink-0" />
+                  {customer.email}
+                </a>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+        <div className="rounded-box border border-base-content/10 bg-base-100 p-4">
+          <div className="text-xs text-base-content/50 mb-1">Lifetime Spend</div>
+          <div className="text-xl font-bold text-base-content">
+            {fmt(customer.lifetimeSpend)}
+          </div>
+        </div>
         <div className="rounded-box border border-base-content/10 bg-base-100 p-4">
           <div className="text-xs text-base-content/50 mb-1">Balance Owed</div>
           <div className={`text-xl font-bold ${customer.totalBalance > 0 ? 'text-warning' : 'text-base-content'}`}>
@@ -180,6 +211,7 @@ export function CustomerDetailPage() {
                 <tr>
                   <th>Job #</th>
                   <th>Type</th>
+                  <th>Technician</th>
                   <th>Status</th>
                   <th>Created</th>
                   <th className="text-right">Amount</th>
@@ -190,6 +222,7 @@ export function CustomerDetailPage() {
                   <tr key={i} className="row-hover">
                     <td className="font-medium text-base-content">{j.jobNumber || '—'}</td>
                     <td className="text-base-content/70">{j.jobTypeName || '—'}</td>
+                    <td className="text-base-content/70">{j.technicianName || '—'}</td>
                     <td>
                       <span className={`badge badge-soft badge-xs ${
                         j.status === 'Completed' ? 'badge-success' :

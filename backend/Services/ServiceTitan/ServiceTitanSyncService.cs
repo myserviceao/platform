@@ -44,12 +44,14 @@ public class ServiceTitanSyncService
             var jobTypeMap = await _client.GetJobTypeMapAsync(token, stTenantId);
             _logger.LogInformation("[Sync] tenantId={TenantId} jobTypes={Count}", tenantId, jobTypeMap.Count);
 
-            // 2. Load customer name map
-            var customerNameMap = await _client.GetCustomerNameMapAsync(token, stTenantId);
-            _logger.LogInformation("[Sync] tenantId={TenantId} customers={Count}", tenantId, customerNameMap.Count);
+            // 2. Load customer data map (name, address, phone, email)
+            var customerDataMap = await _client.GetCustomerDataMapAsync(token, stTenantId);
+            _logger.LogInformation("[Sync] tenantId={TenantId} customers={Count}", tenantId, customerDataMap.Count);
+
+            var customerNameMap = customerDataMap.ToDictionary(kv => kv.Key, kv => kv.Value.Name);
 
             // 3. Upsert all Customers
-            foreach (var (stCustomerId, customerName) in customerNameMap)
+            foreach (var (stCustomerId, custData) in customerDataMap)
             {
                 var existing = await _db.Customers
                     .FirstOrDefaultAsync(c => c.TenantId == tenantId && c.StCustomerId == stCustomerId);
@@ -60,13 +62,19 @@ public class ServiceTitanSyncService
                     {
                         TenantId = tenantId,
                         StCustomerId = stCustomerId,
-                        Name = customerName,
+                        Name = custData.Name,
+                        Address = custData.Address,
+                        Phone = custData.Phone,
+                        Email = custData.Email,
                         UpdatedAt = DateTime.UtcNow
                     });
                 }
                 else
                 {
-                    existing.Name = customerName;
+                    existing.Name = custData.Name;
+                    existing.Address = custData.Address;
+                    existing.Phone = custData.Phone;
+                    existing.Email = custData.Email;
                     existing.UpdatedAt = DateTime.UtcNow;
                 }
             }
@@ -939,6 +947,23 @@ public class ServiceTitanSyncService
             }
 
             _logger.LogInformation("[Sync] tenantId={TenantId} appointmentsSynced={Count}", tenantId, apptSynced);
+
+            // Backfill technician names on Jobs from their appointments
+            var jobsWithoutTech = await _db.Jobs
+                .Where(j => j.TenantId == tenantId && (j.TechnicianName == null || j.TechnicianName == ""))
+                .ToListAsync();
+
+            foreach (var job in jobsWithoutTech)
+            {
+                var appt = await _db.Appointments
+                    .Include(a => a.Technicians)
+                    .Where(a => a.TenantId == tenantId && a.StJobId == job.StJobId)
+                    .FirstOrDefaultAsync();
+
+                if (appt?.Technicians.Count > 0)
+                    job.TechnicianName = string.Join(", ", appt.Technicians.Select(t => t.TechnicianName));
+            }
+            await _db.SaveChangesAsync();
 
             // Update snapshot timestamp
             var snapshot = await _db.DashboardSnapshots.FirstOrDefaultAsync(s => s.TenantId == tenantId);

@@ -62,9 +62,11 @@ public class ServiceTitanClient
         return map;
     }
 
-    public async Task<Dictionary<long, string>> GetCustomerNameMapAsync(string accessToken, string stTenantId)
+    public record StCustomerData(string Name, string? Address, string? Phone, string? Email);
+
+    public async Task<Dictionary<long, StCustomerData>> GetCustomerDataMapAsync(string accessToken, string stTenantId)
     {
-        var map = new Dictionary<long, string>();
+        var map = new Dictionary<long, StCustomerData>();
         string? continueFrom = null;
         do
         {
@@ -77,14 +79,54 @@ public class ServiceTitanClient
             foreach (var cust in data.EnumerateArray())
             {
                 if (cust.TryGetProperty("id", out var idProp) && cust.TryGetProperty("name", out var nameProp))
-                    map[idProp.GetInt64()] = nameProp.GetString() ?? "Unknown";
+                {
+                    var id = idProp.GetInt64();
+                    var name = nameProp.GetString() ?? "Unknown";
+
+                    string? address = null;
+                    if (cust.TryGetProperty("address", out var addrObj) && addrObj.ValueKind == System.Text.Json.JsonValueKind.Object)
+                    {
+                        var parts = new List<string>();
+                        if (addrObj.TryGetProperty("street", out var street) && street.GetString() is string s && s.Length > 0)
+                            parts.Add(s);
+                        if (addrObj.TryGetProperty("city", out var city) && city.GetString() is string c && c.Length > 0)
+                            parts.Add(c);
+                        if (addrObj.TryGetProperty("state", out var state) && state.GetString() is string st && st.Length > 0)
+                            parts.Add(st);
+                        if (addrObj.TryGetProperty("zip", out var zip) && zip.GetString() is string z && z.Length > 0)
+                            parts.Add(z);
+                        if (parts.Count > 0) address = string.Join(", ", parts);
+                    }
+
+                    string? phone = null;
+                    if (cust.TryGetProperty("phoneSettings", out var phones) && phones.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    {
+                        foreach (var p in phones.EnumerateArray())
+                        {
+                            if (p.TryGetProperty("phoneNumber", out var pn) && pn.GetString() is string pNum && pNum.Length > 0)
+                            { phone = pNum; break; }
+                        }
+                    }
+
+                    string? email = null;
+                    if (cust.TryGetProperty("email", out var emailProp) && emailProp.GetString() is string em && em.Length > 0)
+                        email = em;
+
+                    map[id] = new StCustomerData(name, address, phone, email);
+                }
             }
             var hasMore = root.TryGetProperty("hasMore", out var hm) && hm.GetBoolean();
             continueFrom = hasMore && root.TryGetProperty("continueFrom", out var cf) ? cf.GetString() : null;
             if (!hasMore) break;
         } while (continueFrom != null);
-        _logger.LogInformation("[ST] Customer name map loaded count={Count}", map.Count);
+        _logger.LogInformation("[ST] Customer data map loaded count={Count}", map.Count);
         return map;
+    }
+
+    public async Task<Dictionary<long, string>> GetCustomerNameMapAsync(string accessToken, string stTenantId)
+    {
+        var data = await GetCustomerDataMapAsync(accessToken, stTenantId);
+        return data.ToDictionary(kv => kv.Key, kv => kv.Value.Name);
     }
 
     public async Task<string> GetInvoicesExportAsync(string accessToken, string stTenantId, string? from = null)

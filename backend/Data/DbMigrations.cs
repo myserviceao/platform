@@ -245,6 +245,16 @@ public static class DbMigrations
             ALTER TABLE ""Vendors"" ADD COLUMN IF NOT EXISTS ""StVendorId"" bigint NOT NULL DEFAULT 0;
         ");
 
+        // Add Address to Customers
+        await db.Database.ExecuteSqlRawAsync(@"
+            ALTER TABLE ""Customers"" ADD COLUMN IF NOT EXISTS ""Address"" TEXT;
+        ");
+
+        // Add TechnicianName to Jobs
+        await db.Database.ExecuteSqlRawAsync(@"
+            ALTER TABLE ""Jobs"" ADD COLUMN IF NOT EXISTS ""TechnicianName"" TEXT;
+        ");
+
         // Make VendorId nullable for AP bills from ST that may not have a matched vendor
         await db.Database.ExecuteSqlRawAsync(@"
             ALTER TABLE ""ApBills"" ALTER COLUMN ""VendorId"" DROP NOT NULL;

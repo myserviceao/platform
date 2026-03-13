@@ -14,6 +14,7 @@ public class Job
     public string? JobTypeName { get; set; }
     public string? HoldReasonName { get; set; }
     public string? TagTypeIds { get; set; } // Comma-separated ST tag IDs
+    public string? TechnicianName { get; set; }
 
     public decimal TotalAmount { get; set; }
 
