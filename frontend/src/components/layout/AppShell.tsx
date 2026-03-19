@@ -35,7 +35,8 @@ const THEME_OPTIONS: { value: string; label: string; group: 'dark' | 'light' }[]
   { value: 'gourmet', label: 'Gourmet', group: 'light' },
   { value: 'ghibli', label: 'Ghibli', group: 'light' },
   { value: 'mintlify', label: 'Mintlify', group: 'light' },
-  { value: 'perplexity', 'asap', label: 'Perplexity', group: 'light' },
+  { value: 'perplexity', label: 'Perplexity', group: 'light' },
+  { value: 'asap', label: 'ASAP HVAC', group: 'dark' },
 ]
 
 function isGroup(entry: NavEntry): entry is NavGroup {
