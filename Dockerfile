@@ -1,3 +1,4 @@
+# Build: 1773931975
 # ── Stage 1: Build frontend ───────────────────────────────────────────────────
 FROM node:20-alpine AS frontend-build
 WORKDIR /app/frontend
