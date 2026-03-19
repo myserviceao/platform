@@ -23,3 +23,42 @@
 ::-webkit-scrollbar-thumb:hover {
   background: color-mix(in oklab, var(--color-base-content) 40%, transparent);
 }
+
+/* ASAP HVAC Custom Theme - Purple/Orange */
+[data-theme="asap"] {
+  --color-base-100: oklch(0.17 0.02 285);       /* #1a1625 dark purple-black */
+  --color-base-200: oklch(0.14 0.02 285);       /* #141020 deeper */
+  --color-base-300: oklch(0.21 0.03 285);       /* #231d30 lighter */
+  --color-base-content: oklch(0.95 0 0);          /* white text */
+
+  --color-primary: oklch(0.65 0.18 45);           /* #F7A547 orange */
+  --color-primary-content: oklch(0.15 0.02 285);  /* dark text on orange */
+
+  --color-secondary: oklch(0.42 0.18 290);        /* #543C94 deep purple */
+  --color-secondary-content: oklch(0.95 0 0);     /* white on purple */
+
+  --color-accent: oklch(0.70 0.12 170);           /* #4CBEA0 teal */
+  --color-accent-content: oklch(0.15 0.02 285);   /* dark on teal */
+
+  --color-neutral: oklch(0.25 0.03 285);          /* neutral purple-gray */
+  --color-neutral-content: oklch(0.90 0 0);       /* light text */
+
+  --color-info: oklch(0.65 0.15 250);             /* blue info */
+  --color-info-content: oklch(0.95 0 0);
+  --color-success: oklch(0.70 0.12 170);          /* teal success */
+  --color-success-content: oklch(0.15 0.02 285);
+  --color-warning: oklch(0.75 0.15 60);           /* warm yellow */
+  --color-warning-content: oklch(0.15 0.02 285);
+  --color-error: oklch(0.60 0.20 25);             /* red-orange */
+  --color-error-content: oklch(0.95 0 0);
+
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.75rem;
+  --size-selector: 0.28rem;
+  --size-field: 0.28rem;
+  --border: 1px;
+  --depth: 1;
+  --noise: 0;
+}
+
