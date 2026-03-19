@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd /c/Users/PC/desktop/myserviceao/platform/backend && dotnet build --nologo --verbosity quiet 2>&1 | tail -10)",
+      "Bash(dotnet build:*)",
+      "Bash(cd /c/Users/PC/desktop/myserviceao/platform/frontend && npx tsc --noEmit 2>&1 | tail -10)",
+      "Bash(npx -p typescript tsc --noEmit 2>&1 | tail -10)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git pull:*)",
+      "Bash(git rebase:*)",
+      "Bash(git stash:*)",
+      "Bash(git reset:*)",
+      "Bash(git push:*)",
+      "Bash(cd /c/Users/PC/desktop/myserviceao/platform/frontend && npx -p typescript tsc --noEmit 2>&1)",
+      "Bash(cd /c/Users/PC/desktop/myserviceao/platform/frontend && npm run build 2>&1 | tail -40)",
+      "Bash(npx -p typescript tsc --noEmit 2>&1)",
+      "Bash(cd \"C:/Users/PC/desktop/myserviceao/platform/frontend\" && npx tsc --noEmit 2>&1 | tail -20)",
+      "Bash(cd \"C:/Users/PC/desktop/myserviceao/platform/frontend\" && npx vite build 2>&1 | tail -20)",
+      "Bash(cd \"C:/Users/PC/desktop/myserviceao/platform/frontend\" && npm run build 2>&1 | tail -20)",
+      "Bash(cd \"C:/Users/PC/desktop/myserviceao/platform/frontend\" && node_modules/.bin/tsc -b 2>&1 | tail -20)",
+      "Bash(cd \"C:/Users/PC/desktop/myserviceao/platform/frontend\" && npm install 2>&1 | tail -5)",
+      "Bash(cd \"C:/Users/PC/desktop/myserviceao/platform/frontend\" && npm run build 2>&1 | tail -30)",
+      "Bash(cd \"C:/Users/PC/desktop/myserviceao/platform/frontend\" && npm run build 2>&1 | tail -10)"
+    ]
+  }
+}
