@@ -1,6 +1,6 @@
 import { useState, useEffect, createContext, useContext, useCallback, useRef } from 'react'
 
-export type Theme = 'dark' | 'light' | 'corporate' | 'gourmet' | 'luxury' | 'soft' | 'shadcn' | 'slack' | 'spotify' | 'vscode' | 'claude' | 'pastel' | 'valorant' | 'ghibli' | 'mintlify' | 'perplexity' | 'black'
+export type Theme = 'dark' | 'light' | 'corporate' | 'gourmet' | 'luxury' | 'soft' | 'shadcn' | 'slack' | 'spotify' | 'vscode' | 'claude' | 'pastel' | 'valorant' | 'ghibli' | 'mintlify' | 'perplexity' | 'black' | 'asap'
 
 interface ThemeContextType {
   theme: Theme
