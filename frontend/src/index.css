@@ -24,33 +24,37 @@
   background: color-mix(in oklab, var(--color-base-content) 40%, transparent);
 }
 
-/* ASAP HVAC Custom Theme - Purple/Orange */
+/* ASAP HVAC Custom Theme - Teal sidebar, Purple background, Orange accents */
 [data-theme="asap"] {
-  --color-base-100: oklch(0.17 0.02 285);       /* #1a1625 dark purple-black */
-  --color-base-200: oklch(0.14 0.02 285);       /* #141020 deeper */
-  --color-base-300: oklch(0.21 0.03 285);       /* #231d30 lighter */
-  --color-base-content: oklch(0.95 0 0);          /* white text */
+  /* base-100 = sidebar, topbar, cards */
+  --color-base-100: oklch(0.68 0.11 170);         /* #4CBEA0 teal */
+  /* base-200 = main page background */
+  --color-base-200: oklch(0.35 0.16 290);         /* #432D88 deep purple */
+  /* base-300 = borders, hover states, slightly lighter purple */
+  --color-base-300: oklch(0.40 0.16 290);         /* #543C94 lighter purple */
+  /* text on teal/purple backgrounds */
+  --color-base-content: oklch(0.98 0 0);          /* white text */
 
-  --color-primary: oklch(0.65 0.18 45);           /* #F7A547 orange */
-  --color-primary-content: oklch(0.15 0.02 285);  /* dark text on orange */
+  --color-primary: oklch(0.72 0.17 55);           /* #F7A547 orange - buttons, CTAs */
+  --color-primary-content: oklch(0.20 0.05 290);  /* dark purple text on orange */
 
-  --color-secondary: oklch(0.42 0.18 290);        /* #543C94 deep purple */
-  --color-secondary-content: oklch(0.95 0 0);     /* white on purple */
+  --color-secondary: oklch(0.30 0.14 290);        /* #381460 darker purple */
+  --color-secondary-content: oklch(0.98 0 0);     /* white on dark purple */
 
-  --color-accent: oklch(0.70 0.12 170);           /* #4CBEA0 teal */
-  --color-accent-content: oklch(0.15 0.02 285);   /* dark on teal */
+  --color-accent: oklch(0.60 0.13 170);           /* darker teal for accents */
+  --color-accent-content: oklch(0.98 0 0);        /* white on accent */
 
-  --color-neutral: oklch(0.25 0.03 285);          /* neutral purple-gray */
-  --color-neutral-content: oklch(0.90 0 0);       /* light text */
+  --color-neutral: oklch(0.30 0.10 290);          /* dark purple neutral */
+  --color-neutral-content: oklch(0.95 0 0);       /* light text */
 
   --color-info: oklch(0.65 0.15 250);             /* blue info */
-  --color-info-content: oklch(0.95 0 0);
-  --color-success: oklch(0.70 0.12 170);          /* teal success */
-  --color-success-content: oklch(0.15 0.02 285);
-  --color-warning: oklch(0.75 0.15 60);           /* warm yellow */
-  --color-warning-content: oklch(0.15 0.02 285);
-  --color-error: oklch(0.60 0.20 25);             /* red-orange */
-  --color-error-content: oklch(0.95 0 0);
+  --color-info-content: oklch(0.98 0 0);
+  --color-success: oklch(0.72 0.17 55);           /* orange as success (matches brand) */
+  --color-success-content: oklch(0.20 0.05 290);
+  --color-warning: oklch(0.80 0.14 80);           /* yellow warning */
+  --color-warning-content: oklch(0.20 0.05 290);
+  --color-error: oklch(0.60 0.22 25);             /* red error */
+  --color-error-content: oklch(0.98 0 0);
 
   --radius-selector: 0.5rem;
   --radius-field: 0.5rem;
@@ -61,4 +65,3 @@
   --depth: 1;
   --noise: 0;
 }
-
